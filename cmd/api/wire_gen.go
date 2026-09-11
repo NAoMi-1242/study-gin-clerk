@@ -10,13 +10,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"study-gin-clerk/internal/handler"
 	"study-gin-clerk/internal/router"
+	"study-gin-clerk/internal/service"
 )
 
 // Injectors from wire.go:
 
 func InitializeApp() (*gin.Engine, error) {
 	healthHandler := handler.NewHealthHandler()
-	userHandler := handler.NewUserHandler()
+	userService := service.NewUserService()
+	userHandler := handler.NewUserHandler(userService)
 	dependencies := router.Dependencies{
 		HealthHandler: healthHandler,
 		UserHandler:   userHandler,

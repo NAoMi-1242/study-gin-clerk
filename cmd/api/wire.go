@@ -9,10 +9,12 @@ import (
 
 	"study-gin-clerk/internal/handler"
 	"study-gin-clerk/internal/router"
+	"study-gin-clerk/internal/service"
 )
 
 func InitializeApp() (*gin.Engine, error) {
 	wire.Build(
+		service.Set,
 		handler.Set,
 		router.Set,
 	)
