@@ -56,12 +56,16 @@ study-gin-clerk/
   │         ├── wire.go             # 【手動編集】Wire の設計図 (Injector)
   │         └── wire_gen.go         # 【自動生成】Wire が生成した初期化コード
   └── internal/
+       ├── service/
+       │    ├── wire.go             # Service 全体の ProviderSet (service.Set)
+       │    └── user.go
        ├── handler/
-       │    ├── provider.go         # Handler 全体の ProviderSet (handler.Set)
+       │    ├── wire.go             # Handler 全体の ProviderSet (handler.Set)
        │    ├── health.go
        │    └── user.go
        └── router/
-            └── routes.go           # Router の ProviderSet (router.Set) と Dependencies
+            ├── wire.go             # Router の ProviderSet (router.Set)
+            └── routes.go           # ルーティング定義と Dependencies
 ```
 
 ### 各ファイルの役割
@@ -152,10 +156,10 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 
 ### ステップ 2: パッケージの `ProviderSet` に登録する
 
-`internal/handler/provider.go` の `wire.NewSet` に新しいコンストラクタを追加します。
+`internal/handler/wire.go` の `wire.NewSet` に新しいコンストラクタを追加します。
 
 ```go
-// internal/handler/provider.go
+// internal/handler/wire.go
 var Set = wire.NewSet(
     NewHealthHandler,
     NewUserHandler,

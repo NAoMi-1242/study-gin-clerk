@@ -2,16 +2,9 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/google/wire"
 
 	"study-gin-clerk/internal/handler"
 	"study-gin-clerk/internal/middleware"
-)
-
-// Set provides router dependency injection.
-var Set = wire.NewSet(
-	wire.Struct(new(Dependencies), "*"),
-	New,
 )
 
 type Dependencies struct {
