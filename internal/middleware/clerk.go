@@ -14,7 +14,9 @@ func ClerkAuthMiddleware() gin.HandlerFunc {
     clerkMiddleware := clerkhttp.RequireHeaderAuthorization()
 
     return func(c *gin.Context) {
+        called := false
         next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            called = true
             // Clerk middlewareが追加したContextを
             // GinのRequestにも引き継ぐ。
             c.Request = r
@@ -38,5 +40,8 @@ func ClerkAuthMiddleware() gin.HandlerFunc {
         })
 
         clerkMiddleware(next).ServeHTTP(c.Writer, c.Request)
+        if !called {
+            c.Abort()
+        }
     }
 }

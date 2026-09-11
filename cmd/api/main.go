@@ -8,8 +8,6 @@ import (
     "github.com/clerk/clerk-sdk-go/v2"
 
     "study-gin-clerk/internal/config"
-    "study-gin-clerk/internal/handler"
-    "study-gin-clerk/internal/router"
 )
 
 func main() {
@@ -20,13 +18,10 @@ func main() {
 
     clerk.SetKey(cfg.ClerkSecretKey)
 
-    healthHandler := handler.NewHealthHandler()
-    userHandler := handler.NewUserHandler()
-
-    engine := router.New(router.Dependencies{
-        HealthHandler: healthHandler,
-        UserHandler:   userHandler,
-    })
+    engine, err := InitializeApp()
+    if err != nil {
+        log.Fatal(err)
+    }
 
     server := &http.Server{
         Addr:              ":" + cfg.Port,

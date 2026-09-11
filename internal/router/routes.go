@@ -1,15 +1,22 @@
 package router
 
 import (
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
+	"github.com/google/wire"
 
-    "study-gin-clerk/internal/handler"
-    "study-gin-clerk/internal/middleware"
+	"study-gin-clerk/internal/handler"
+	"study-gin-clerk/internal/middleware"
+)
+
+// Set provides router dependency injection.
+var Set = wire.NewSet(
+	wire.Struct(new(Dependencies), "*"),
+	New,
 )
 
 type Dependencies struct {
-    HealthHandler *handler.HealthHandler
-    UserHandler   *handler.UserHandler
+	HealthHandler *handler.HealthHandler
+	UserHandler   *handler.UserHandler
 }
 
 func New(deps Dependencies) *gin.Engine {
