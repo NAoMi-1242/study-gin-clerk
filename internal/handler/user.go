@@ -19,6 +19,16 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 	}
 }
 
+// GetMe godoc
+// @Summary 自分のプロファイル取得
+// @Description 認証済みユーザーのプロファイル情報を取得します
+// @Tags users
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} service.UserProfile
+// @Failure 401 {object} map[string]string "未認証"
+// @Failure 403 {object} map[string]string "認可エラー・トークン不正"
+// @Router /api/v1/me [get]
 func (h *UserHandler) GetMe(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 

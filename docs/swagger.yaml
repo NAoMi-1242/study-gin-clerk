@@ -1,0 +1,287 @@
+basePath: /
+definitions:
+  handler.CreateChatRequest:
+    properties:
+      title:
+        type: string
+    type: object
+  handler.SendMessageRequest:
+    properties:
+      content:
+        type: string
+    required:
+    - content
+    type: object
+  model.Chat:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      messages:
+        items:
+          $ref: '#/definitions/model.Message'
+        type: array
+      title:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  model.Message:
+    properties:
+      chat_id:
+        type: integer
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      role:
+        description: '"user", "assistant", "system"'
+        type: string
+    type: object
+  service.UserProfile:
+    properties:
+      plan:
+        type: string
+      status:
+        type: string
+      user_id:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Go + Gin + Clerk + GORM による AI チャット基盤 API
+  title: Study Gin Clerk & AI Chat API
+  version: "1.0"
+paths:
+  /api/v1/chats:
+    get:
+      description: 認証済みユーザーが作成したチャット一覧を取得します
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.Chat'
+              type: array
+            type: object
+        "401":
+          description: 未認証
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: 認可エラー・トークン不正
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: サーバーエラー
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 自分のチャット一覧取得
+      tags:
+      - chats
+    post:
+      consumes:
+      - application/json
+      description: 新しい会話セッションを作成します
+      parameters:
+      - description: チャット設定
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handler.CreateChatRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Chat'
+        "401":
+          description: 未認証
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: 認可エラー・トークン不正
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: サーバーエラー
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: チャット新規作成
+      tags:
+      - chats
+  /api/v1/chats/{id}:
+    get:
+      description: 指定されたIDのチャット詳細と過去メッセージ履歴を取得します
+      parameters:
+      - description: Chat ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Chat'
+        "400":
+          description: 不正なID
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 未認証
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: 認可エラー・トークン不正
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: チャットが見つからない
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: チャット詳細・メッセージ履歴取得
+      tags:
+      - chats
+  /api/v1/chats/{id}/messages:
+    post:
+      consumes:
+      - application/json
+      description: ユーザーメッセージを送信し、AI返答を自動生成して保存します
+      parameters:
+      - description: Chat ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: メッセージ内容
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.SendMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              $ref: '#/definitions/model.Message'
+            type: object
+        "400":
+          description: 不正なリクエスト
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 未認証
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: 認可エラー・トークン不正
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: サーバーエラー
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: メッセージ送信＆AI返答生成
+      tags:
+      - chats
+  /api/v1/me:
+    get:
+      description: 認証済みユーザーのプロファイル情報を取得します
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.UserProfile'
+        "401":
+          description: 未認証
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: 認可エラー・トークン不正
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 自分のプロファイル取得
+      tags:
+      - users
+  /health:
+    get:
+      description: サーバーの稼働状態を確認します
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: ヘルスチェック
+      tags:
+      - health
+securityDefinitions:
+  BearerAuth:
+    description: Clerk から取得した JWT トークン (Bearer <TOKEN>)
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -10,6 +10,16 @@ import (
     "study-gin-clerk/internal/config"
 )
 
+// @title Study Gin Clerk & AI Chat API
+// @version 1.0
+// @description Go + Gin + Clerk + GORM による AI チャット基盤 API
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Clerk から取得した JWT トークン (Bearer <TOKEN>)
 func main() {
     cfg, err := config.Load()
     if err != nil {

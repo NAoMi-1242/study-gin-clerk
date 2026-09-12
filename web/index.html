@@ -3,61 +3,203 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <title>Go + Gin + Clerk Test</title>
-
+    <title>Go + Gin + Clerk API Explorer</title>
     <style>
       body {
-        font-family: sans-serif;
-        max-width: 900px;
-        margin: 40px auto;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        max-width: 1300px;
+        margin: 24px auto;
         padding: 0 20px;
+        color: #333;
+        background-color: #fbfbfb;
       }
 
-      button {
-        padding: 10px 16px;
-        margin: 5px 0;
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 12px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        color: #1a1a1a;
+      }
+
+      .auth-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+
+      .auth-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .btn {
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 6px;
         cursor: pointer;
+        border: 1px solid #cbd5e1;
+        background: #f8fafc;
+        transition: all 0.15s ease;
+      }
+
+      .btn:hover {
+        background: #f1f5f9;
+      }
+
+      .btn-primary {
+        background: #2563eb;
+        color: white;
+        border-color: #1d4ed8;
+      }
+
+      .btn-primary:hover {
+        background: #1d4ed8;
+      }
+
+      .btn-success {
+        background: #16a34a;
+        color: white;
+        border-color: #15803d;
+      }
+
+      .btn-success:hover {
+        background: #15803d;
+      }
+
+      .badge {
+        font-size: 13px;
+        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        background: #e2e8f0;
+        color: #475569;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .badge-success {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .token-box {
+        margin-top: 12px;
       }
 
       textarea {
         width: 100%;
-        min-height: 180px;
-        font-family: monospace;
+        height: 60px;
+        font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 8px 10px;
         box-sizing: border-box;
+        background: #f8fafc;
+        resize: vertical;
       }
 
-      pre {
-        background: #f5f5f5;
-        padding: 16px;
-        overflow-x: auto;
+      .swagger-section {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+
+      .swagger-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 20px;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .swagger-header h2 {
+        margin: 0;
+        font-size: 18px;
+        color: #334155;
+      }
+
+      iframe#swagger-frame {
+        width: 100%;
+        height: 880px;
+        border: none;
+        display: block;
       }
     </style>
   </head>
 
   <body>
-    <h1>Go + Gin + Clerk</h1>
+    <header>
+      <h1>Go + Gin + Clerk API Explorer</h1>
+      <div>
+        <a
+          href="/swagger/index.html"
+          target="_blank"
+          style="text-decoration: none"
+        >
+          <button class="btn" type="button">別タブで開く ↗</button>
+        </a>
+      </div>
+    </header>
 
-    <div id="app">
-      <p>Clerk loading...</p>
+    <!-- 認証 & トークン管理エリア -->
+    <div class="auth-card">
+      <div class="auth-header">
+        <div id="app">
+          <p style="margin: 0">Clerk loading...</p>
+        </div>
+        <div
+          id="auth-actions"
+          style="display: none; align-items: center; gap: 8px"
+        >
+          <button id="get-token" class="btn btn-primary">
+            Get JWT & Sync to Swagger (24h)
+          </button>
+          <button id="copy-token" class="btn">Copy JWT</button>
+          <span id="auth-status" class="badge">未取得</span>
+        </div>
+      </div>
+
+      <div id="token-container" class="token-box" style="display: none">
+        <textarea
+          id="token"
+          readonly
+          placeholder="JWT token will appear here"
+        ></textarea>
+      </div>
     </div>
 
-    <hr />
-
-    <h2>JWT</h2>
-
-    <button id="get-token">Get JWT</button>
-
-    <textarea id="token" readonly placeholder="JWT will appear here"></textarea>
-
-    <h2>API</h2>
-
-    <button id="call-api">Call /api/v1/me</button>
-    <button id="create-chat">Create Chat (POST /api/v1/chats)</button>
-    <button id="list-chats">List Chats (GET /api/v1/chats)</button>
-    <button id="send-msg">Send Message (POST /api/v1/chats/1/messages)</button>
-
-    <pre id="result"></pre>
+    <!-- 埋め込み Swagger UI エリア -->
+    <div class="swagger-section">
+      <div class="swagger-header">
+        <h2>Interactive API Documentation (Swagger UI)</h2>
+        <span style="font-size: 13px; color: #64748b">
+          💡 ログイン時に Bearer 認証が自動セットされます
+        </span>
+      </div>
+      <iframe id="swagger-frame" src="/swagger/index.html"></iframe>
+    </div>
 
     <script>
       const publishableKey =
@@ -70,24 +212,17 @@
       const clerkDomain = atob(publishableKey.split("_")[2]).slice(0, -1);
 
       const uiScript = document.createElement("script");
-
       uiScript.src = `https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`;
-
       uiScript.async = true;
       uiScript.crossOrigin = "anonymous";
-
       document.head.appendChild(uiScript);
 
       uiScript.onload = async () => {
         const clerkScript = document.createElement("script");
-
         clerkScript.src = `https://${clerkDomain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`;
-
         clerkScript.async = true;
         clerkScript.crossOrigin = "anonymous";
-
         clerkScript.setAttribute("data-clerk-publishable-key", publishableKey);
-
         document.head.appendChild(clerkScript);
 
         clerkScript.onload = async () => {
@@ -101,22 +236,71 @@
         };
       };
 
+      // Swagger UI の iframe に認証トークンを注入する
+      function syncSwaggerAuth(token) {
+        const frame = document.getElementById("swagger-frame");
+        if (frame && frame.contentWindow && frame.contentWindow.ui) {
+          try {
+            frame.contentWindow.ui.preauthorizeApiKey(
+              "BearerAuth",
+              "Bearer " + token,
+            );
+            return true;
+          } catch (e) {
+            console.warn("Could not preauthorize Swagger UI:", e);
+          }
+        }
+        return false;
+      }
+
+      async function getAuthToken() {
+        if (!Clerk.session) return null;
+        try {
+          const token = await Clerk.session.getToken({ template: "dev" });
+          if (token) return token;
+        } catch (e) {
+          console.warn(
+            "dev template token fetch failed, fallback to default:",
+            e,
+          );
+        }
+        return await Clerk.session.getToken();
+      }
+
+      async function updateAuthStatus(token) {
+        const statusEl = document.getElementById("auth-status");
+        if (!statusEl) return;
+
+        if (token) {
+          const synced = syncSwaggerAuth(token);
+          if (synced) {
+            statusEl.textContent = "🔒 Swagger 認証済み (24h)";
+            statusEl.className = "badge badge-success";
+          } else {
+            statusEl.textContent = "✅ JWT 取得済み";
+            statusEl.className = "badge badge-success";
+          }
+        } else {
+          statusEl.textContent = "未取得";
+          statusEl.className = "badge";
+        }
+      }
+
       function render() {
         const app = document.getElementById("app");
+        const actions = document.getElementById("auth-actions");
+        const tokenContainer = document.getElementById("token-container");
 
         if (Clerk.isSignedIn) {
           app.innerHTML = `
-                    <p>
-                        Signed in as:
-                        <strong>
-                            ${Clerk.user?.primaryEmailAddress?.emailAddress ?? ""}
-                        </strong>
-                    </p>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span>Signed in as: <strong>${Clerk.user?.primaryEmailAddress?.emailAddress ?? ""}</strong></span>
+              <button id="sign-out" class="btn" style="padding: 4px 10px; font-size: 12px;">Sign out</button>
+            </div>
+          `;
 
-                    <button id="sign-out">
-                        Sign out
-                    </button>
-                `;
+          actions.style.display = "flex";
+          tokenContainer.style.display = "block";
 
           document
             .getElementById("sign-out")
@@ -125,13 +309,20 @@
               render();
             });
 
+          // サインイン中は自動的に 24h トークンを取得して Swagger に反映
+          getAuthToken().then((token) => {
+            if (token) {
+              document.getElementById("token").value = token;
+              updateAuthStatus(token);
+            }
+          });
+
           return;
         }
 
-        app.innerHTML = `
-                <div id="sign-in"></div>
-            `;
-
+        actions.style.display = "none";
+        tokenContainer.style.display = "none";
+        app.innerHTML = `<div id="sign-in"></div>`;
         Clerk.mountSignIn(document.getElementById("sign-in"));
       }
 
@@ -139,105 +330,33 @@
         .getElementById("get-token")
         .addEventListener("click", async () => {
           if (!Clerk.session) {
-            alert("You are not signed in.");
+            alert("先にサインインしてください。");
             return;
           }
 
-          const token = await Clerk.session.getToken();
-
+          const token = await getAuthToken();
           document.getElementById("token").value = token ?? "";
+          await updateAuthStatus(token);
         });
 
-      document
-        .getElementById("call-api")
-        .addEventListener("click", async () => {
-          if (!Clerk.session) {
-            alert("You are not signed in.");
-            return;
-          }
+      document.getElementById("copy-token").addEventListener("click", () => {
+        const token = document.getElementById("token").value;
+        if (!token) {
+          alert("先に 'Get JWT' をクリックしてトークンを取得してください。");
+          return;
+        }
+        navigator.clipboard.writeText(token);
+        alert("JWTトークンをクリップボードにコピーしました！");
+      });
 
-          const token = await Clerk.session.getToken();
-
-          const response = await fetch("/api/v1/me", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          const data = await response.json();
-
-          document.getElementById("result").textContent = JSON.stringify(
-            data,
-            null,
-            4,
-          );
-        });
-
-      let currentChatId = 1;
-
-      document
-        .getElementById("create-chat")
-        .addEventListener("click", async () => {
-          if (!Clerk.session) return alert("You are not signed in.");
-          const token = await Clerk.session.getToken();
-          const response = await fetch("/api/v1/chats", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ title: "新しい相談チャット" }),
-          });
-          const data = await response.json();
-          if (data.id) currentChatId = data.id;
-          document.getElementById("result").textContent = JSON.stringify(
-            data,
-            null,
-            4,
-          );
-        });
-
-      document
-        .getElementById("list-chats")
-        .addEventListener("click", async () => {
-          if (!Clerk.session) return alert("You are not signed in.");
-          const token = await Clerk.session.getToken();
-          const response = await fetch("/api/v1/chats", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const data = await response.json();
-          document.getElementById("result").textContent = JSON.stringify(
-            data,
-            null,
-            4,
-          );
-        });
-
-      document
-        .getElementById("send-msg")
-        .addEventListener("click", async () => {
-          if (!Clerk.session) return alert("You are not signed in.");
-          const token = await Clerk.session.getToken();
-          const response = await fetch(
-            `/api/v1/chats/${currentChatId}/messages`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                content: "こんにちは！おすすめのAI勉強法を教えてください。",
-              }),
-            },
-          );
-          const data = await response.json();
-          document.getElementById("result").textContent = JSON.stringify(
-            data,
-            null,
-            4,
-          );
-        });
+      // iframe 読み込み完了時にもトークンを自動適用
+      const frame = document.getElementById("swagger-frame");
+      frame.addEventListener("load", () => {
+        const token = document.getElementById("token").value;
+        if (token) {
+          setTimeout(() => syncSwaggerAuth(token), 300);
+        }
+      });
     </script>
   </body>
 </html>

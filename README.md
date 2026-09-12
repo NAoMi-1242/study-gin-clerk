@@ -25,17 +25,18 @@
 
 ## 1. 技術スタック
 
-| カテゴリ                 | 採用技術                                                 | バージョン / 用途                                       |
-| :----------------------- | :------------------------------------------------------- | :------------------------------------------------------ |
-| **Language**             | [Go](https://go.dev/)                                    | 1.25                                                    |
-| **Web Framework**        | [Gin](https://github.com/gin-gonic/gin)                  | v1.11.0 (高速な HTTP ルーティング)                      |
-| **Authentication**       | [Clerk Go SDK](https://github.com/clerk/clerk-sdk-go/v2) | v2.7.0 (JWT 検証・セッション管理)                       |
-| **ORM / Database**       | [GORM](https://gorm.io/) / PostgreSQL                    | v1.31.2 / Postgres 16 (AutoMigrate, コネクションプール) |
-| **Dependency Injection** | [Google Wire](https://github.com/google/wire)            | v0.7.0 (コンパイル時コード生成型 DI)                    |
-| **Live Reload**          | [Air](https://github.com/air-verse/air)                  | v1.63.4 (コンテナ内ホットリロード)                      |
-| **Container**            | Docker / Docker Compose                                  | PostgreSQL 16 + Go API                                  |
-| **Future Extensions**    | Supabase (本番 DB 移行)                                  | PostgreSQL 互換接続                                     |
-|                          | Google Gen AI SDK (Go)                                   | AI チャット返答生成エンジン                             |
+| カテゴリ                 | 採用技術                                                    | バージョン / 用途                                               |
+| :----------------------- | :---------------------------------------------------------- | :-------------------------------------------------------------- |
+| **Language**             | [Go](https://go.dev/)                                       | 1.25                                                            |
+| **Web Framework**        | [Gin](https://github.com/gin-gonic/gin)                     | v1.11.0 (高速な HTTP ルーティング)                              |
+| **Authentication**       | [Clerk Go SDK](https://github.com/clerk/clerk-sdk-go/v2)    | v2.7.0 (JWT 検証・セッション管理)                               |
+| **ORM / Database**       | [GORM](https://gorm.io/) / PostgreSQL                       | v1.31.2 / Postgres 16 (AutoMigrate, コネクションプール)         |
+| **Dependency Injection** | [Google Wire](https://github.com/google/wire)               | v0.7.0 (コンパイル時コード生成型 DI)                            |
+| **API Documentation**    | [swaggo/gin-swagger](https://github.com/swaggo/gin-swagger) | v1.6.1 / swag v1.16.4 (OpenAPI / Swagger UI 対話型ドキュメント) |
+| **Live Reload**          | [Air](https://github.com/air-verse/air)                     | v1.63.4 (コンテナ内ホットリロード)                              |
+| **Container**            | Docker / Docker Compose                                     | PostgreSQL 16 + Go API                                          |
+| **Future Extensions**    | Supabase (本番 DB 移行)                                     | PostgreSQL 互換接続                                             |
+|                          | Google Gen AI SDK (Go)                                      | AI チャット返答生成エンジン                                     |
 
 ---
 
@@ -110,6 +111,7 @@ study-gin-clerk/
   │         ├── main.go             # エントリポイント (InitializeApp の実行と HTTP サーバ起動)
   │         ├── wire.go             # Wire 設計図 (Injector 宣言)
   │         └── wire_gen.go         # Wire が自動生成した初期化コード
+  ├── docs/                         # Swagger / OpenAPI 自動生成ドキュメント (docs.go, swagger.json, swagger.yaml)
   ├── internal/
   │    ├── auth/
   │    │    └── user.go             # 認証コンテキスト操作 (SetUserID, MustGetUserID)
@@ -268,9 +270,20 @@ docker compose up --build
 docker compose exec api wire gen ./cmd/api
 ```
 
-### 4. 動作確認
+### 4. Swagger ドキュメントの再生成（APIコメント変更・追加時）
 
+ハンドラーのアノテーション（`@Router` や `@Param` 等）を変更した場合は、コンテナ内で以下を実行してドキュメントを更新します：
+
+```bash
+docker compose exec api swag init -g cmd/api/main.go -o docs
+```
+
+### 5. 動作確認
+
+- **Swagger UI (対話型 API ドキュメント & デバッグ)**: `http://localhost:8080/swagger/index.html`
+  - 右上の「Authorize」ボタンをクリックし、`Bearer <YOUR_JWT_TOKEN>` を入力することで、保護された API（`/api/v1/me`, `/api/v1/chats` など）をブラウザから直接テスト実行できます。
 - **Web UI (Clerk ログイン & トークン取得)**: `http://localhost:8080/`
+  - 「Get JWT」でトークンを取得し、「Open Swagger UI」ボタンから即座に Swagger に遷移可能。
 - **Health Check**: `curl http://localhost:8080/health`
   ```json
   { "status": "ok" }
