@@ -21,19 +21,20 @@ import (
 
 func InitializeApp(cfg config.Config) (*gin.Engine, error) {
 	healthHandler := handler.NewHealthHandler()
-	userService := service.NewUserService()
-	userHandler := handler.NewUserHandler(userService)
 	gormDB, err := db.NewDB(cfg)
 	if err != nil {
 		return nil, err
 	}
+	userProfileRepository := repository.NewUserProfileRepository(gormDB)
+	userService := service.NewUserService(userProfileRepository)
+	userHandler := handler.NewUserHandler(userService)
 	chatRepository := repository.NewChatRepository(gormDB)
 	userAPIKeyRepository := repository.NewUserAPIKeyRepository(gormDB)
 	modelRegistry := ai.NewModelRegistry()
 	memoryCache := ai.NewMemoryCacheDefault()
 	userAPIKeyService := service.NewUserAPIKeyService(userAPIKeyRepository, modelRegistry, memoryCache, cfg)
 	client := ai.NewClient()
-	chatService := service.NewChatService(chatRepository, userAPIKeyService, client)
+	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileRepository)
 	chatHandler := handler.NewChatHandler(chatService)
 	userAPIKeyHandler := handler.NewUserAPIKeyHandler(userAPIKeyService)
 	aiHandler := handler.NewAIHandler(userAPIKeyService)

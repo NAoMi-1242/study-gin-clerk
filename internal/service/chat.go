@@ -12,20 +12,23 @@ import (
 )
 
 type ChatService struct {
-	chatRepo      *repository.ChatRepository
-	apiKeyService *UserAPIKeyService
-	aiClient      *ai.Client
+	chatRepo        *repository.ChatRepository
+	apiKeyService   *UserAPIKeyService
+	aiClient        *ai.Client
+	userProfileRepo *repository.UserProfileRepository
 }
 
 func NewChatService(
 	chatRepo *repository.ChatRepository,
 	apiKeyService *UserAPIKeyService,
 	aiClient *ai.Client,
+	userProfileRepo *repository.UserProfileRepository,
 ) *ChatService {
 	return &ChatService{
-		chatRepo:      chatRepo,
-		apiKeyService: apiKeyService,
-		aiClient:      aiClient,
+		chatRepo:        chatRepo,
+		apiKeyService:   apiKeyService,
+		aiClient:        aiClient,
+		userProfileRepo: userProfileRepo,
 	}
 }
 
@@ -78,13 +81,20 @@ func (s *ChatService) SendMessage(
 		return nil, nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
-	// 4. GoAI SDK を用いて AI の返答を生成
-	aiContent, err := s.aiClient.GenerateReply(ctx, providerName, modelID, apiKey, chat.Messages, content)
+	// 4. ユーザーの最新システムプロンプトを取得 (常に最新の共通設定を動的適用)
+	userProfile, _ := s.userProfileRepo.GetProfile(ctx, userID)
+	systemPrompt := ""
+	if userProfile != nil {
+		systemPrompt = userProfile.SystemPrompt
+	}
+
+	// 5. GoAI SDK を用いて AI の返答を生成
+	aiContent, err := s.aiClient.GenerateReply(ctx, providerName, modelID, apiKey, systemPrompt, chat.Messages, content)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate AI reply: %w", err)
 	}
 
-	// 5. AI の返答メッセージを DB 保存
+	// 6. AI の返答メッセージを DB 保存
 	aiMsg, err := s.chatRepo.CreateMessage(ctx, chatID, "assistant", aiContent)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to save assistant message: %w", err)
@@ -125,8 +135,15 @@ func (s *ChatService) StreamMessage(
 		return nil, nil, nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
-	// 4. GoAI StreamText を呼び出し
-	stream, err := s.aiClient.StreamReply(ctx, providerName, modelID, apiKey, chat.Messages, content)
+	// 4. ユーザーの最新システムプロンプトを取得 (常に最新の共通設定を動的適用)
+	userProfile, _ := s.userProfileRepo.GetProfile(ctx, userID)
+	systemPrompt := ""
+	if userProfile != nil {
+		systemPrompt = userProfile.SystemPrompt
+	}
+
+	// 5. GoAI StreamText を呼び出し
+	stream, err := s.aiClient.StreamReply(ctx, providerName, modelID, apiKey, systemPrompt, chat.Messages, content)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to initiate AI stream: %w", err)
 	}

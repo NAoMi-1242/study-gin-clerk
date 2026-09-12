@@ -453,6 +453,72 @@
                 }
             }
         },
+        "/api/v1/me/system-prompt": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "ユーザー共通のデフォルトシステムプロンプトを更新・保存します",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "システムプロンプト更新",
+                "parameters": [
+                    {
+                        "description": "システムプロンプト設定",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.UpdateSystemPromptRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.UserProfile"
+                        }
+                    },
+                    "400": {
+                        "description": "不正なリクエスト",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "未認証",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/user/api-keys": {
             "get": {
                 "security": [
@@ -703,6 +769,14 @@
                 }
             }
         },
+        "handler.UpdateSystemPromptRequest": {
+            "type": "object",
+            "properties": {
+                "system_prompt": {
+                    "type": "string"
+                }
+            }
+        },
         "model.Chat": {
             "type": "object",
             "properties": {
@@ -782,6 +856,9 @@
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                },
+                "system_prompt": {
                     "type": "string"
                 },
                 "user_id": {

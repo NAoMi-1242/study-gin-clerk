@@ -56,15 +56,20 @@ func (c *Client) CreateModel(providerName, modelID, apiKey string) (provider.Lan
 	}
 }
 
-// buildMessages converts past DB messages and the new user prompt into GoAI provider.Message slice.
-func (c *Client) buildMessages(history []model.Message, prompt string) []provider.Message {
+// buildMessages converts system prompt, past DB messages, and the new user prompt into GoAI provider.Message slice.
+func (c *Client) buildMessages(systemPrompt string, history []model.Message, prompt string) []provider.Message {
 	var msgs []provider.Message
+	if trimmed := strings.TrimSpace(systemPrompt); trimmed != "" {
+		msgs = append(msgs, goai.SystemMessage(trimmed))
+	}
 	for _, m := range history {
 		switch m.Role {
 		case "user":
 			msgs = append(msgs, goai.UserMessage(m.Content))
 		case "assistant":
 			msgs = append(msgs, goai.AssistantMessage(m.Content))
+		case "system":
+			msgs = append(msgs, goai.SystemMessage(m.Content))
 		}
 	}
 	if prompt != "" {
@@ -94,7 +99,7 @@ func formatAIError(providerName, modelID string, err error) error {
 // GenerateReply generates a complete AI response synchronously.
 func (c *Client) GenerateReply(
 	ctx context.Context,
-	providerName, modelID, apiKey string,
+	providerName, modelID, apiKey, systemPrompt string,
 	history []model.Message,
 	prompt string,
 ) (string, error) {
@@ -103,7 +108,7 @@ func (c *Client) GenerateReply(
 		return "", err
 	}
 
-	msgs := c.buildMessages(history, prompt)
+	msgs := c.buildMessages(systemPrompt, history, prompt)
 	res, err := goai.GenerateText(ctx, langModel, goai.WithMessages(msgs...))
 	if err != nil {
 		return "", formatAIError(providerName, modelID, err)
@@ -115,7 +120,7 @@ func (c *Client) GenerateReply(
 // StreamReply starts a streaming text generation using GoAI StreamText.
 func (c *Client) StreamReply(
 	ctx context.Context,
-	providerName, modelID, apiKey string,
+	providerName, modelID, apiKey, systemPrompt string,
 	history []model.Message,
 	prompt string,
 ) (*goai.TextStream, error) {
@@ -124,7 +129,7 @@ func (c *Client) StreamReply(
 		return nil, err
 	}
 
-	msgs := c.buildMessages(history, prompt)
+	msgs := c.buildMessages(systemPrompt, history, prompt)
 	stream, err := goai.StreamText(ctx, langModel, goai.WithMessages(msgs...))
 	if err != nil {
 		return nil, formatAIError(providerName, modelID, err)

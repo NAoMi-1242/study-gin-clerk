@@ -251,6 +251,62 @@
         </div>
       </div>
 
+      <!-- 1-2. システムプロンプト設定エリア -->
+      <div
+        style="
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 12px 16px;
+          margin-bottom: 16px;
+        "
+      >
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
+          "
+        >
+          <div style="font-weight: 600; font-size: 14px; color: #334155">
+            📝 ユーザー共通システムプロンプト
+            (全会話に常に最新の設定が動的適用されます)
+          </div>
+          <span
+            id="prompt-status-badge"
+            style="font-size: 12px; color: #16a34a; display: none"
+          >
+            ✅ 保存しました
+          </span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: flex-start">
+          <textarea
+            id="system-prompt-input"
+            placeholder="例: あなたは優秀で親切なAIアシスタントです。常に日本語で丁寧に回答してください。（「語尾に『にゃん』をつけて可愛く答えて」等の指示も可能です）"
+            style="
+              flex: 1;
+              height: 48px;
+              padding: 8px 12px;
+              border: 1px solid #cbd5e1;
+              border-radius: 6px;
+              font-size: 13px;
+              resize: vertical;
+              background: white;
+            "
+          ></textarea>
+          <button
+            id="save-prompt-btn"
+            class="btn btn-primary"
+            style="white-space: nowrap; height: 48px"
+          >
+            プロンプト保存
+          </button>
+        </div>
+      </div>
+
       <!-- 2. チャット & ストリーミング エリア -->
       <div
         style="
@@ -540,6 +596,7 @@
               updateAuthStatus(token);
               document.getElementById("ai-playground").style.display = "block";
               loadRegisteredKeys();
+              loadUserProfile();
               loadChatList();
             }
           });
@@ -658,6 +715,53 @@
         .getElementById("fetch-models-btn")
         .addEventListener("click", () => loadAvailableModels(true));
 
+      // --- システムプロンプト管理 (GET /api/v1/me, PUT /api/v1/me/system-prompt) ---
+      async function loadUserProfile() {
+        try {
+          const res = await authFetch("/api/v1/me");
+          if (!res.ok) return;
+          const profile = await res.json();
+          if (profile.system_prompt) {
+            document.getElementById("system-prompt-input").value =
+              profile.system_prompt;
+          }
+        } catch (e) {
+          console.warn("ユーザープロファイルの取得に失敗:", e);
+        }
+      }
+
+      document
+        .getElementById("save-prompt-btn")
+        .addEventListener("click", async () => {
+          const btn = document.getElementById("save-prompt-btn");
+          const statusEl = document.getElementById("prompt-status-badge");
+          const promptVal = document
+            .getElementById("system-prompt-input")
+            .value.trim();
+          btn.disabled = true;
+          btn.textContent = "保存中...";
+          try {
+            const res = await authFetch("/api/v1/me/system-prompt", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ system_prompt: promptVal }),
+            });
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.error || "保存に失敗しました");
+            }
+            statusEl.style.display = "inline";
+            setTimeout(() => {
+              statusEl.style.display = "none";
+            }, 3000);
+          } catch (e) {
+            alert("エラー: " + e.message);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = "プロンプト保存";
+          }
+        });
+
       // --- 会話履歴の管理 (GET /api/v1/chats, GET /api/v1/chats/:id) ---
       async function loadChatList() {
         const select = document.getElementById("chat-select");
@@ -732,6 +836,16 @@
           }
 
           let html = "";
+          const activePrompt = document
+            .getElementById("system-prompt-input")
+            ?.value?.trim();
+          if (activePrompt) {
+            html += `
+              <div style="margin-bottom: 12px; padding: 6px 12px; background: #e0f2fe; color: #0369a1; border-radius: 6px; font-size: 12px; border: 1px solid #bae6fd;">
+                📌 <strong>ユーザー共通システムプロンプト適用中 (最新):</strong> ${escapeHtml(activePrompt)}
+              </div>
+            `;
+          }
           for (const msg of messages) {
             if (msg.role === "user") {
               html += `
