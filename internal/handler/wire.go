@@ -7,5 +7,8 @@ var Set = wire.NewSet(
 	NewHealthHandler,
 	NewUserHandler,
 	NewChatHandler,
+	NewUserAPIKeyHandler,
+	NewAIHandler,
 )
+
 

@@ -30,8 +30,17 @@ func NewDB(cfg config.Config) (*gorm.DB, error) {
 	if err := database.AutoMigrate(
 		&model.Chat{},
 		&model.Message{},
+		&model.UserAPIKey{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to auto migrate: %w", err)
+	}
+
+	// 以前の仕様で存在していた chats テーブルの provider / model カラムを安全に削除
+	if database.Migrator().HasColumn("chats", "provider") {
+		_ = database.Migrator().DropColumn("chats", "provider")
+	}
+	if database.Migrator().HasColumn("chats", "model") {
+		_ = database.Migrator().DropColumn("chats", "model")
 	}
 
 	return database, nil

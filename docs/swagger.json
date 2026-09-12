@@ -9,6 +9,58 @@
     "host": "localhost:8080",
     "basePath": "/",
     "paths": {
+        "/api/v1/ai/models": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "認証済みユーザーが登録した API キーに基づき、プロバイダから動的に取得したモデル一覧を返却します。15分間のインメモリキャッシュ付きです。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai"
+                ],
+                "summary": "利用可能モデル一覧取得 (動的取得 \u0026 キャッシュ)",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "キャッシュをバイパスして強制再取得するか",
+                        "name": "refresh",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "未認証",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/chats": {
             "get": {
                 "security": [
@@ -72,7 +124,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "新しい会話セッションを作成します",
+                "description": "新しい会話セッションを作成します（モデル指定は不要でメッセージ送信時に選択します）",
                 "consumes": [
                     "application/json"
                 ],
@@ -85,7 +137,7 @@
                 "summary": "チャット新規作成",
                 "parameters": [
                     {
-                        "description": "チャット設定",
+                        "description": "チャット設定 (タイトル)",
                         "name": "request",
                         "in": "body",
                         "schema": {
@@ -207,7 +259,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "ユーザーメッセージを送信し、AI返答を自動生成して保存します",
+                "description": "ユーザーメッセージを送信し、指定されたプロバイダ・モデルを使ってAI返答を一括生成して保存します（一括JSON）",
                 "consumes": [
                     "application/json"
                 ],
@@ -217,7 +269,7 @@
                 "tags": [
                     "chats"
                 ],
-                "summary": "メッセージ送信＆AI返答生成",
+                "summary": "メッセージ送信＆AI返答一括生成",
                 "parameters": [
                     {
                         "type": "integer",
@@ -227,7 +279,7 @@
                         "required": true
                     },
                     {
-                        "description": "メッセージ内容",
+                        "description": "メッセージ内容・プロバイダ・モデル",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -266,6 +318,79 @@
                     },
                     "403": {
                         "description": "認可エラー・トークン不正",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/chats/{id}/messages/stream": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "ユーザーメッセージを送信し、指定されたプロバイダ・モデルでAI返答を Server-Sent Events (SSE) で1文字ずつリアルタイム受信します。完了時に全文が自動保存されます。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "summary": "メッセージ送信＆AI返答リアルタイムストリーミング (SSE)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Chat ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "メッセージ内容・プロバイダ・モデル",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.SendMessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "text/event-stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "不正なリクエスト",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "未認証",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -328,6 +453,186 @@
                 }
             }
         },
+        "/api/v1/user/api-keys": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "ユーザーが登録した各社 API キーの一覧（マスクされた key_hint のみ）を取得します。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "api_keys"
+                ],
+                "summary": "登録済み API キー一覧",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.UserAPIKey"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "未認証",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "ユーザー独自の各社 AI API キーを登録します。登録時にプロバイダへの疎通確認を行い、AES-256-GCM で暗号化して安全に保存します。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "api_keys"
+                ],
+                "summary": "API キー登録・更新",
+                "parameters": [
+                    {
+                        "description": "API キー情報",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.RegisterAPIKeyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "登録成功 (マスクされた key_hint を返却)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "検証失敗または不正なリクエスト",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "未認証",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/user/api-keys/{provider}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "指定されたプロバイダの API キーを削除し、モデルキャッシュをパージします。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "api_keys"
+                ],
+                "summary": "登録済み API キー削除",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider Name (e.g. openrouter)",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "削除成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "未認証",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "キーが見つからない",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "サーバーの稼働状態を確認します",
@@ -361,13 +666,39 @@
                 }
             }
         },
+        "handler.RegisterAPIKeyRequest": {
+            "type": "object",
+            "required": [
+                "api_key",
+                "provider"
+            ],
+            "properties": {
+                "api_key": {
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
+                    "type": "string"
+                }
+            }
+        },
         "handler.SendMessageRequest": {
             "type": "object",
             "required": [
-                "content"
+                "content",
+                "model",
+                "provider"
             ],
             "properties": {
                 "content": {
+                    "type": "string"
+                },
+                "model": {
+                    "description": "e.g. \"anthropic/claude-3.5-sonnet\"",
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
                     "type": "string"
                 }
             }
@@ -415,6 +746,31 @@
                 },
                 "role": {
                     "description": "\"user\", \"assistant\", \"system\"",
+                    "type": "string"
+                }
+            }
+        },
+        "model.UserAPIKey": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "key_hint": {
+                    "description": "Masked representation for display (e.g. \"sk-or-v1-...1234\")",
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
                     "type": "string"
                 }
             }

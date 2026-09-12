@@ -17,6 +17,8 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	DBSSLMode  string
+
+	EncryptionKey string
 }
 
 func Load() (Config, error) {
@@ -32,6 +34,8 @@ func Load() (Config, error) {
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     getEnv("DB_NAME", "study_app"),
 		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
+
+		EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
 	}
 
 	if cfg.ClerkSecretKey == "" {
@@ -41,6 +45,10 @@ func Load() (Config, error) {
 	// DATABASE_URL が未指定の場合は、DB_PASSWORD を必須とする (Fail Fast)
 	if cfg.DatabaseURL == "" && cfg.DBPassword == "" {
 		return Config{}, fmt.Errorf("DB_PASSWORD is required (or set DATABASE_URL)")
+	}
+
+	if cfg.EncryptionKey == "" {
+		return Config{}, fmt.Errorf("ENCRYPTION_KEY is required")
 	}
 
 	return cfg, nil
