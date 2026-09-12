@@ -18,7 +18,7 @@ func main() {
 
     clerk.SetKey(cfg.ClerkSecretKey)
 
-    engine, err := InitializeApp()
+    engine, err := InitializeApp(cfg)
     if err != nil {
         log.Fatal(err)
     }

@@ -1,122 +1,111 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <title>Go + Gin + Clerk Test</title>
 
     <style>
-        body {
-            font-family: sans-serif;
-            max-width: 900px;
-            margin: 40px auto;
-            padding: 0 20px;
-        }
+      body {
+        font-family: sans-serif;
+        max-width: 900px;
+        margin: 40px auto;
+        padding: 0 20px;
+      }
 
-        button {
-            padding: 10px 16px;
-            margin: 5px 0;
-            cursor: pointer;
-        }
+      button {
+        padding: 10px 16px;
+        margin: 5px 0;
+        cursor: pointer;
+      }
 
-        textarea {
-            width: 100%;
-            min-height: 180px;
-            font-family: monospace;
-            box-sizing: border-box;
-        }
+      textarea {
+        width: 100%;
+        min-height: 180px;
+        font-family: monospace;
+        box-sizing: border-box;
+      }
 
-        pre {
-            background: #f5f5f5;
-            padding: 16px;
-            overflow-x: auto;
-        }
+      pre {
+        background: #f5f5f5;
+        padding: 16px;
+        overflow-x: auto;
+      }
     </style>
-</head>
+  </head>
 
-<body>
+  <body>
     <h1>Go + Gin + Clerk</h1>
 
     <div id="app">
-        <p>Clerk loading...</p>
+      <p>Clerk loading...</p>
     </div>
 
-    <hr>
+    <hr />
 
     <h2>JWT</h2>
 
-    <button id="get-token">
-        Get JWT
-    </button>
+    <button id="get-token">Get JWT</button>
 
-    <textarea
-        id="token"
-        readonly
-        placeholder="JWT will appear here"
-    ></textarea>
+    <textarea id="token" readonly placeholder="JWT will appear here"></textarea>
 
     <h2>API</h2>
 
-    <button id="call-api">
-        Call /api/v1/me
-    </button>
+    <button id="call-api">Call /api/v1/me</button>
+    <button id="create-chat">Create Chat (POST /api/v1/chats)</button>
+    <button id="list-chats">List Chats (GET /api/v1/chats)</button>
+    <button id="send-msg">Send Message (POST /api/v1/chats/1/messages)</button>
 
     <pre id="result"></pre>
 
     <script>
-        const publishableKey = "pk_test_cHJvdWQtb3lzdGVyLTQzMzUuY2xlcmsuYWNjb3VudHMuZGV2JA";
+      const publishableKey =
+        "pk_test_cHJvdWQtb3lzdGVyLTQzMzUuY2xlcmsuYWNjb3VudHMuZGV2JA";
 
-        if (!publishableKey) {
-            throw new Error("Set your Clerk Publishable Key");
-        }
+      if (!publishableKey) {
+        throw new Error("Set your Clerk Publishable Key");
+      }
 
-        const clerkDomain = atob(
-            publishableKey.split("_")[2]
-        ).slice(0, -1);
+      const clerkDomain = atob(publishableKey.split("_")[2]).slice(0, -1);
 
-        const uiScript = document.createElement("script");
+      const uiScript = document.createElement("script");
 
-        uiScript.src =
-            `https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`;
+      uiScript.src = `https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`;
 
-        uiScript.async = true;
-        uiScript.crossOrigin = "anonymous";
+      uiScript.async = true;
+      uiScript.crossOrigin = "anonymous";
 
-        document.head.appendChild(uiScript);
+      document.head.appendChild(uiScript);
 
-        uiScript.onload = async () => {
-            const clerkScript = document.createElement("script");
+      uiScript.onload = async () => {
+        const clerkScript = document.createElement("script");
 
-            clerkScript.src =
-                `https://${clerkDomain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`;
+        clerkScript.src = `https://${clerkDomain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`;
 
-            clerkScript.async = true;
-            clerkScript.crossOrigin = "anonymous";
+        clerkScript.async = true;
+        clerkScript.crossOrigin = "anonymous";
 
-            clerkScript.setAttribute(
-                "data-clerk-publishable-key",
-                publishableKey
-            );
+        clerkScript.setAttribute("data-clerk-publishable-key", publishableKey);
 
-            document.head.appendChild(clerkScript);
+        document.head.appendChild(clerkScript);
 
-            clerkScript.onload = async () => {
-                await Clerk.load({
-                    ui: {
-                        ClerkUI: window.__internal_ClerkUICtor,
-                    },
-                });
+        clerkScript.onload = async () => {
+          await Clerk.load({
+            ui: {
+              ClerkUI: window.__internal_ClerkUICtor,
+            },
+          });
 
-                render();
-            };
+          render();
         };
+      };
 
-        function render() {
-            const app = document.getElementById("app");
+      function render() {
+        const app = document.getElementById("app");
 
-            if (Clerk.isSignedIn) {
-                app.innerHTML = `
+        if (Clerk.isSignedIn) {
+          app.innerHTML = `
                     <p>
                         Signed in as:
                         <strong>
@@ -129,60 +118,126 @@
                     </button>
                 `;
 
-                document
-                    .getElementById("sign-out")
-                    .addEventListener("click", async () => {
-                        await Clerk.signOut();
-                        render();
-                    });
+          document
+            .getElementById("sign-out")
+            .addEventListener("click", async () => {
+              await Clerk.signOut();
+              render();
+            });
 
-                return;
-            }
+          return;
+        }
 
-            app.innerHTML = `
+        app.innerHTML = `
                 <div id="sign-in"></div>
             `;
 
-            Clerk.mountSignIn(
-                document.getElementById("sign-in")
-            );
-        }
+        Clerk.mountSignIn(document.getElementById("sign-in"));
+      }
 
-        document
-            .getElementById("get-token")
-            .addEventListener("click", async () => {
-                if (!Clerk.session) {
-                    alert("You are not signed in.");
-                    return;
-                }
+      document
+        .getElementById("get-token")
+        .addEventListener("click", async () => {
+          if (!Clerk.session) {
+            alert("You are not signed in.");
+            return;
+          }
 
-                const token = await Clerk.session.getToken();
+          const token = await Clerk.session.getToken();
 
-                document.getElementById("token").value =
-                    token ?? "";
-            });
+          document.getElementById("token").value = token ?? "";
+        });
 
-        document
-            .getElementById("call-api")
-            .addEventListener("click", async () => {
-                if (!Clerk.session) {
-                    alert("You are not signed in.");
-                    return;
-                }
+      document
+        .getElementById("call-api")
+        .addEventListener("click", async () => {
+          if (!Clerk.session) {
+            alert("You are not signed in.");
+            return;
+          }
 
-                const token = await Clerk.session.getToken();
+          const token = await Clerk.session.getToken();
 
-                const response = await fetch("/api/v1/me", {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                });
+          const response = await fetch("/api/v1/me", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
-                const data = await response.json();
+          const data = await response.json();
 
-                document.getElementById("result").textContent =
-                    JSON.stringify(data, null, 4);
-            });
+          document.getElementById("result").textContent = JSON.stringify(
+            data,
+            null,
+            4,
+          );
+        });
+
+      let currentChatId = 1;
+
+      document
+        .getElementById("create-chat")
+        .addEventListener("click", async () => {
+          if (!Clerk.session) return alert("You are not signed in.");
+          const token = await Clerk.session.getToken();
+          const response = await fetch("/api/v1/chats", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ title: "新しい相談チャット" }),
+          });
+          const data = await response.json();
+          if (data.id) currentChatId = data.id;
+          document.getElementById("result").textContent = JSON.stringify(
+            data,
+            null,
+            4,
+          );
+        });
+
+      document
+        .getElementById("list-chats")
+        .addEventListener("click", async () => {
+          if (!Clerk.session) return alert("You are not signed in.");
+          const token = await Clerk.session.getToken();
+          const response = await fetch("/api/v1/chats", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await response.json();
+          document.getElementById("result").textContent = JSON.stringify(
+            data,
+            null,
+            4,
+          );
+        });
+
+      document
+        .getElementById("send-msg")
+        .addEventListener("click", async () => {
+          if (!Clerk.session) return alert("You are not signed in.");
+          const token = await Clerk.session.getToken();
+          const response = await fetch(
+            `/api/v1/chats/${currentChatId}/messages`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                content: "こんにちは！おすすめのAI勉強法を教えてください。",
+              }),
+            },
+          );
+          const data = await response.json();
+          document.getElementById("result").textContent = JSON.stringify(
+            data,
+            null,
+            4,
+          );
+        });
     </script>
-</body>
+  </body>
 </html>

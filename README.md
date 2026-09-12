@@ -17,6 +17,7 @@
   - [4.3. Google Wire の導入（手動DIからの脱却）](#43-google-wire-の導入手動diからの脱却)
   - [4.4. Handler と Service の明確な責務分離](#44-handler-と-service-の明確な責務分離)
   - [4.5. Wire 定義ファイル名を `wire.go` に統一](#45-wire-定義ファイル名を-wirego-に統一)
+  - [4.6. Clerk を SSoT とするチャットデータモデリング（Webhook同期の排除）](#46-clerk-を-ssot-とするチャットデータモデリングwebhook同期の排除)
 - [5. 今後の運用・拡張構想（GORM + Supabase + GoAI）](#5-今後の運用拡張構想gorm--supabase--goai)
 - [6. ローカル開発環境のセットアップ](#6-ローカル開発環境のセットアップ)
 
@@ -24,16 +25,17 @@
 
 ## 1. 技術スタック
 
-| カテゴリ                 | 採用技術                                                 | バージョン / 用途                    |
-| :----------------------- | :------------------------------------------------------- | :----------------------------------- |
-| **Language**             | [Go](https://go.dev/)                                    | 1.25                                 |
-| **Web Framework**        | [Gin](https://github.com/gin-gonic/gin)                  | v1.11.0 (高速な HTTP ルーティング)   |
-| **Authentication**       | [Clerk Go SDK](https://github.com/clerk/clerk-sdk-go/v2) | v2.7.0 (JWT 検証・セッション管理)    |
-| **Dependency Injection** | [Google Wire](https://github.com/google/wire)            | v0.7.0 (コンパイル時コード生成型 DI) |
-| **Live Reload**          | [Air](https://github.com/air-verse/air)                  | v1.63.4 (コンテナ内ホットリロード)   |
-| **Container**            | Docker / Docker Compose                                  | Alpine Linux ベースの開発環境        |
-| **Future Extensions**    | GORM (PostgreSQL / Supabase)                             | DB アクセス & メッセージ履歴管理     |
-|                          | Google Gen AI SDK (Go)                                   | AI チャット返答生成エンジン          |
+| カテゴリ                 | 採用技術                                                 | バージョン / 用途                                       |
+| :----------------------- | :------------------------------------------------------- | :------------------------------------------------------ |
+| **Language**             | [Go](https://go.dev/)                                    | 1.25                                                    |
+| **Web Framework**        | [Gin](https://github.com/gin-gonic/gin)                  | v1.11.0 (高速な HTTP ルーティング)                      |
+| **Authentication**       | [Clerk Go SDK](https://github.com/clerk/clerk-sdk-go/v2) | v2.7.0 (JWT 検証・セッション管理)                       |
+| **ORM / Database**       | [GORM](https://gorm.io/) / PostgreSQL                    | v1.31.2 / Postgres 16 (AutoMigrate, コネクションプール) |
+| **Dependency Injection** | [Google Wire](https://github.com/google/wire)            | v0.7.0 (コンパイル時コード生成型 DI)                    |
+| **Live Reload**          | [Air](https://github.com/air-verse/air)                  | v1.63.4 (コンテナ内ホットリロード)                      |
+| **Container**            | Docker / Docker Compose                                  | PostgreSQL 16 + Go API                                  |
+| **Future Extensions**    | Supabase (本番 DB 移行)                                  | PostgreSQL 互換接続                                     |
+|                          | Google Gen AI SDK (Go)                                   | AI チャット返答生成エンジン                             |
 
 ---
 
@@ -43,7 +45,7 @@
 
 システムは関心の分離（Separation of Concerns）に基づき、以下の階層構造で構成されています。
 
-```mermaid
+````mermaid
 graph TD
     Client["クライアント (Web/Browser)"] -->|HTTP Request| Router["Router (routes.go)"]
     Router -->|Authorization Header| Middleware["Middleware (clerk.go)"]
@@ -53,20 +55,16 @@ graph TD
         Middleware -->|User ID抽出| AuthCtx["internal/auth (Context操作)"]
     end
 
-    Middleware -->|c.Next| Handler["Handler (user.go / health.go)"]
+    Middleware -->|c.Next| Handler["Handler (user.go / chat.go / health.go)"]
     Handler -->|MustGetUserID| AuthCtx
-    Handler -->|ビジネス処理要求| Service["Service (user.go)"]
+    Handler -->|ビジネス処理要求| Service["Service (user.go / chat.go)"]
+    Service -->|データ永続化要求| Repository["Repository (chat.go)"]
+    Repository -->|SQL/GORM実行| DBClient["*gorm.DB (コネクションプール)"]
+    DBClient -->|TCP接続| Database[("PostgreSQL 16 / Supabase")]
 
-    subgraph "Future Storage & AI"
-        Service -.-> Repository["Repository (将来追加)"]
-        Repository -.-> Database[("Supabase / GORM")]
-        Service -.-> AIClient["Go AI / Gemini"]
-    end
-
-    Wire["Google Wire (wire.go / wire_gen.go)"] -.->|依存性を自動注入| Router
-    Wire -.->|依存性を自動注入| Handler
+    Wire["Google Wire (wire.go / wire_gen.go)"] -.->|依存性を自動注入| DBClient
+    Wire -.->|依存性を自動注入| Repository
     Wire -.->|依存性を自動注入| Service
-```
 
 ### リクエスト処理シーケンス（`/api/v1/me` の例）
 
@@ -95,7 +93,7 @@ sequenceDiagram
         Service-->>Handler: UserProfile { user_id, plan, status }
         Handler-->>Client: 200 OK (JSON)
     end
-```
+````
 
 ---
 
@@ -104,7 +102,7 @@ sequenceDiagram
 ```
 study-gin-clerk/
   ├── Dockerfile                    # Go 1.25 + Air + Wire CLI
-  ├── compose.yaml                  # Docker Compose 定義
+  ├── compose.yaml                  # Docker Compose 定義 (Go API + PostgreSQL 16)
   ├── .air.toml                     # ホットリロード設定
   ├── wire-manual.md                # Google Wire 運用マニュアル
   ├── cmd/
@@ -116,21 +114,31 @@ study-gin-clerk/
   │    ├── auth/
   │    │    └── user.go             # 認証コンテキスト操作 (SetUserID, MustGetUserID)
   │    ├── config/
-  │    │    └── env.go              # 環境変数読み込み・バリデーション
+  │    │    └── env.go              # 環境変数読み込み・バリデーション (DB DSN対応)
+  │    ├── db/
+  │    │    ├── wire.go             # db.Set (DB 接続の DI 定義)
+  │    │    └── db.go               # GORM 接続・プール設定・AutoMigrate
   │    ├── handler/
   │    │    ├── wire.go             # handler.Set (Handler 層の DI 定義)
+  │    │    ├── chat.go             # チャット関連 API
   │    │    ├── health.go           # ヘルスチェック API
   │    │    └── user.go             # ユーザー関連 API
   │    ├── middleware/
-  │    │    └── clerk.go            # Clerk 認証ミドルウェア
+  │    │    └── clerk.go            # Clerk 認証ミドルウェア (防腐層)
+  │    ├── model/
+  │    │    └── chat.go             # GORM モデル (Chat, Message)
+  │    ├── repository/
+  │    │    ├── wire.go             # repository.Set (Repository 層の DI 定義)
+  │    │    └── chat.go             # GORM を用いたチャットデータアクセス
   │    ├── router/
   │    │    ├── wire.go             # router.Set (Router 層の DI 定義)
   │    │    └── routes.go           # エンドポイントのルーティング定義
   │    └── service/
   │         ├── wire.go             # service.Set (Service 層の DI 定義)
+  │         ├── chat.go             # チャット業務ロジック (AI返答生成)
   │         └── user.go             # ユーザー関連ビジネスロジック
   └── web/
-       └── index.html               # 動作検証用フロントエンド (Clerk JS 連携)
+       └── index.html               # 動作検証用フロントエンド (Clerk JS 連携 & チャットテスト)
 ```
 
 ---
@@ -181,7 +189,14 @@ study-gin-clerk/
 ### 4.5. Wire 定義ファイル名を `wire.go` に統一
 
 - **可読性の向上**:
-  各パッケージ内に `wire.go` を配置（`handler/wire.go`, `service/wire.go`, `router/wire.go`）。「Wire への登録情報は各フォルダの `wire.go` を見ればすべて分かる」という統一ルールを確立した。
+  各パッケージ内に `wire.go` を配置（`handler/wire.go`, `service/wire.go`, `router/wire.go`, `repository/wire.go`, `db/wire.go`）。「Wire への登録情報は各フォルダの `wire.go` を見ればすべて分かる」という統一ルールを確立した。
+
+### 4.6. Clerk を SSoT とするチャットデータモデリング（Webhook同期の排除）
+
+- **設計判断**:
+  ユーザープロファイル情報を Webhook で DB に複製同期する構成は取らず、Clerk を **SSoT（信頼できる唯一の情報源）** として扱う方針を決定。データベースには `users` テーブルを作らず、`chats` テーブルの `user_id` カラムに Clerk ID を直接保持する。
+- **効果**:
+  Webhook サーバーの運用や署名検証、同期遅延・不整合のリスクを完全に排除。すべてのクエリに `WHERE user_id = ?` を適用することで、シンプルかつセキュアなマルチテナント分離を実現した。
 
 ---
 

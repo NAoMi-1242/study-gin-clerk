@@ -8,20 +8,31 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"study-gin-clerk/internal/config"
+	"study-gin-clerk/internal/db"
 	"study-gin-clerk/internal/handler"
+	"study-gin-clerk/internal/repository"
 	"study-gin-clerk/internal/router"
 	"study-gin-clerk/internal/service"
 )
 
 // Injectors from wire.go:
 
-func InitializeApp() (*gin.Engine, error) {
+func InitializeApp(cfg config.Config) (*gin.Engine, error) {
 	healthHandler := handler.NewHealthHandler()
 	userService := service.NewUserService()
 	userHandler := handler.NewUserHandler(userService)
+	gormDB, err := db.NewDB(cfg)
+	if err != nil {
+		return nil, err
+	}
+	chatRepository := repository.NewChatRepository(gormDB)
+	chatService := service.NewChatService(chatRepository)
+	chatHandler := handler.NewChatHandler(chatService)
 	dependencies := router.Dependencies{
 		HealthHandler: healthHandler,
 		UserHandler:   userHandler,
+		ChatHandler:   chatHandler,
 	}
 	engine := router.New(dependencies)
 	return engine, nil

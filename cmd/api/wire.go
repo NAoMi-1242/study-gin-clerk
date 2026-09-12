@@ -7,13 +7,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 
+	"study-gin-clerk/internal/config"
+	"study-gin-clerk/internal/db"
 	"study-gin-clerk/internal/handler"
+	"study-gin-clerk/internal/repository"
 	"study-gin-clerk/internal/router"
 	"study-gin-clerk/internal/service"
 )
 
-func InitializeApp() (*gin.Engine, error) {
+func InitializeApp(cfg config.Config) (*gin.Engine, error) {
 	wire.Build(
+		db.Set,
+		repository.Set,
 		service.Set,
 		handler.Set,
 		router.Set,
