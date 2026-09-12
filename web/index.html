@@ -174,7 +174,7 @@
           style="display: none; align-items: center; gap: 8px"
         >
           <button id="get-token" class="btn btn-primary">
-            Get JWT & Sync to Swagger (24h)
+            Get JWT & Sync to Swagger
           </button>
           <button id="copy-token" class="btn">Copy JWT</button>
           <span id="auth-status" class="badge">未取得</span>
@@ -261,17 +261,23 @@
         return false;
       }
 
+      let isDevTemplate = false;
+
       async function getAuthToken() {
         if (!Clerk.session) return null;
         try {
           const token = await Clerk.session.getToken({ template: "dev" });
-          if (token) return token;
+          if (token) {
+            isDevTemplate = true;
+            return token;
+          }
         } catch (e) {
           console.warn(
             "dev template token fetch failed, fallback to default:",
             e,
           );
         }
+        isDevTemplate = false;
         return await Clerk.session.getToken();
       }
 
@@ -281,11 +287,12 @@
 
         if (token) {
           const synced = syncSwaggerAuth(token);
+          const durationLabel = isDevTemplate ? "24h" : "通常/60s";
           if (synced) {
-            statusEl.textContent = "🔒 Swagger 認証済み (24h)";
+            statusEl.textContent = `🔒 Swagger 認証済み (${durationLabel})`;
             statusEl.className = "badge badge-success";
           } else {
-            statusEl.textContent = "✅ JWT 取得済み";
+            statusEl.textContent = `✅ JWT 取得済み (${durationLabel})`;
             statusEl.className = "badge badge-success";
           }
         } else {
