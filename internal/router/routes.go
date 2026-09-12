@@ -43,6 +43,7 @@ func New(deps Dependencies) *gin.Engine {
 	api.Use(middleware.ClerkAuthMiddleware())
 
 	api.GET("/me", deps.UserHandler.GetMe)
+	api.PUT("/me/system-prompt", deps.UserHandler.UpdateSystemPrompt)
 
 	// AI 関連エンドポイント
 	api.GET("/ai/models", deps.AIHandler.ListModels)

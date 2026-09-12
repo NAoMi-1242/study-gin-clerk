@@ -31,6 +31,11 @@ definitions:
     - model
     - provider
     type: object
+  handler.UpdateSystemPromptRequest:
+    properties:
+      system_prompt:
+        type: string
+    type: object
   model.Chat:
     properties:
       created_at:
@@ -84,6 +89,8 @@ definitions:
       plan:
         type: string
       status:
+        type: string
+      system_prompt:
         type: string
       user_id:
         type: string
@@ -377,6 +384,48 @@ paths:
       security:
       - BearerAuth: []
       summary: 自分のプロファイル取得
+      tags:
+      - users
+  /api/v1/me/system-prompt:
+    put:
+      consumes:
+      - application/json
+      description: ユーザー共通のデフォルトシステムプロンプトを更新・保存します
+      parameters:
+      - description: システムプロンプト設定
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateSystemPromptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.UserProfile'
+        "400":
+          description: 不正なリクエスト
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 未認証
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: サーバーエラー
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: システムプロンプト更新
       tags:
       - users
   /api/v1/user/api-keys:
