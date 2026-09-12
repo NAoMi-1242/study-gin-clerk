@@ -34,7 +34,7 @@
 | **Dependency Injection** | [Google Wire](https://github.com/google/wire)               | v0.7.0 (コンパイル時コード生成型 DI)                            |
 | **API Documentation**    | [swaggo/gin-swagger](https://github.com/swaggo/gin-swagger) | v1.6.1 / swag v1.16.4 (OpenAPI / Swagger UI 対話型ドキュメント) |
 | **Live Reload**          | [Air](https://github.com/air-verse/air)                     | v1.63.4 (コンテナ内ホットリロード)                              |
-| **Container**            | Docker / Docker Compose                                     | PostgreSQL 16 + Go API                                          |
+| **Container**            | Docker / Docker Compose                                     | PostgreSQL 16 + Go API + Nginx Web (仮フロントエンド)           |
 | **Future Extensions**    | Supabase (本番 DB 移行)                                     | PostgreSQL 互換接続                                             |
 |                          | Google Gen AI SDK (Go)                                      | AI チャット返答生成エンジン                                     |
 
@@ -140,7 +140,8 @@ study-gin-clerk/
   │         ├── chat.go             # チャット業務ロジック (AI返答生成)
   │         └── user.go             # ユーザー関連ビジネスロジック
   └── web/
-       └── index.html               # 動作検証用フロントエンド (Clerk JS 連携 & チャットテスト)
+       ├── nginx.conf               # 仮フロントエンド配信用 Nginx 設定 (リバースプロキシ & 動的環境変数配信)
+       └── index.html               # 動作検証用フロントエンド (Clerk JS 連携 & Swagger UI 埋め込み)
 ```
 
 ---
@@ -250,9 +251,8 @@ study-gin-clerk/
 ```env
 PORT=8080
 CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxx
+CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxx
 ```
-
-※ フロントエンドテスト用（`web/index.html`）の Publishable Key は、必要に応じて `web/index.html` 内の `publishableKey` に設定してください。
 
 ### 2. コンテナのビルドと起動
 
@@ -260,7 +260,8 @@ CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxx
 docker compose up --build
 ```
 
-- Air によるホットリロードが有効化されています。ファイルを保存すると自動で再ビルド・再起動されます。
+- Air による API ホットリロードが有効化されています。
+- Nginx（ポート 3000）により仮フロントエンドが配信され、`.env` の `CLERK_PUBLISHABLE_KEY` が動的注入されます。
 
 ### 3. Wire コードの再生成（開発時）
 
@@ -280,10 +281,9 @@ docker compose exec api swag init -g cmd/api/main.go -o docs
 
 ### 5. 動作確認
 
-- **Swagger UI (対話型 API ドキュメント & デバッグ)**: `http://localhost:8080/swagger/index.html`
-  - 右上の「Authorize」ボタンをクリックし、`Bearer <YOUR_JWT_TOKEN>` を入力することで、保護された API（`/api/v1/me`, `/api/v1/chats` など）をブラウザから直接テスト実行できます。
-- **Web UI (Clerk ログイン & トークン取得)**: `http://localhost:8080/`
-  - 「Get JWT」でトークンを取得し、「Open Swagger UI」ボタンから即座に Swagger に遷移可能。
+- **Web UI & API Explorer (仮フロントエンド)**: `http://localhost:3000/`
+  - Clerk ログインを行うと、24時間有効な JWT が自動取得され、埋め込み Swagger UI に自動で Bearer 認証がセットされます。
+- **Swagger UI (単体アクセス)**: `http://localhost:8080/swagger/index.html`
 - **Health Check**: `curl http://localhost:8080/health`
   ```json
   { "status": "ok" }

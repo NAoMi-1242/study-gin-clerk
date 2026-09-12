@@ -201,12 +201,20 @@
       <iframe id="swagger-frame" src="/swagger/index.html"></iframe>
     </div>
 
+    <!-- 動的環境変数の読み込み (.env から Nginx 起動時に生成) -->
+    <script src="/env.js"></script>
+
     <script>
-      const publishableKey =
-        "pk_test_cHJvdWQtb3lzdGVyLTQzMzUuY2xlcmsuYWNjb3VudHMuZGV2JA";
+      const publishableKey = window.__ENV__?.CLERK_PUBLISHABLE_KEY || "";
 
       if (!publishableKey) {
-        throw new Error("Set your Clerk Publishable Key");
+        document.getElementById("app").innerHTML = `
+          <p style="color: #dc2626; font-weight: bold;">
+            ⚠️ エラー: Clerk Publishable Key が設定されていません。<br>
+            .env ファイルに CLERK_PUBLISHABLE_KEY を設定し、コンテナを再起動してください。
+          </p>
+        `;
+        throw new Error("CLERK_PUBLISHABLE_KEY is not set in /env.js or .env");
       }
 
       const clerkDomain = atob(publishableKey.split("_")[2]).slice(0, -1);

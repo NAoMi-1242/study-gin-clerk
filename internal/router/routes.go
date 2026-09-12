@@ -1,6 +1,9 @@
 package router
 
 import (
+	"time"
+
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -19,9 +22,15 @@ type Dependencies struct {
 func New(deps Dependencies) *gin.Engine {
 	engine := gin.Default()
 
-	engine.GET("/", func(c *gin.Context) {
-		c.File("./web/index.html")
-	})
+	// CORS 設定 (フロントエンドからの通信を許可)
+	engine.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:8080", "http://127.0.0.1:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	engine.GET("/health", deps.HealthHandler.Get)
 	engine.GET("/api/v1/health", deps.HealthHandler.Get)
