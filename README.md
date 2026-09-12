@@ -252,6 +252,15 @@ study-gin-clerk/
 PORT=8080
 CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxx
 CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxx
+
+# データベース接続 (Supabase などの場合は DATABASE_URL 1本での指定も可能)
+# DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require
+DB_HOST=db
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=password
+DB_NAME=study_app
+DB_SSLMODE=disable
 ```
 
 ### 2. コンテナのビルドと起動
