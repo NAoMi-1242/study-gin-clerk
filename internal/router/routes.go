@@ -27,10 +27,15 @@ func New(deps Dependencies) *gin.Engine {
 
 	api.GET("/me", deps.UserHandler.GetMe)
 
-	api.POST("/chats", deps.ChatHandler.CreateChat)
-	api.GET("/chats", deps.ChatHandler.ListChats)
-	api.GET("/chats/:id", deps.ChatHandler.GetChat)
-	api.POST("/chats/:id/messages", deps.ChatHandler.SendMessage)
+	chats := api.Group("/chats")
+	{
+		chats.POST("", deps.ChatHandler.CreateChat)
+		chats.GET("", deps.ChatHandler.ListChats)
+
+		chats.GET("/:id", deps.ChatHandler.GetChat)
+		
+		chats.POST("/:id/messages", deps.ChatHandler.SendMessage)
+	}
 
 	return engine
 }
