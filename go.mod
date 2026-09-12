@@ -1,6 +1,8 @@
 module study-gin-clerk
 
-go 1.25.0
+go 1.26.0
+
+toolchain go1.26.7
 
 require (
 	github.com/clerk/clerk-sdk-go/v2 v2.7.0
