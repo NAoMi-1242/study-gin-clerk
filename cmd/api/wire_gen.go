@@ -8,6 +8,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"study-gin-clerk/internal/ai"
 	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/db"
 	"study-gin-clerk/internal/handler"
@@ -20,19 +21,29 @@ import (
 
 func InitializeApp(cfg config.Config) (*gin.Engine, error) {
 	healthHandler := handler.NewHealthHandler()
-	userService := service.NewUserService()
-	userHandler := handler.NewUserHandler(userService)
 	gormDB, err := db.NewDB(cfg)
 	if err != nil {
 		return nil, err
 	}
+	userProfileRepository := repository.NewUserProfileRepository(gormDB)
+	userService := service.NewUserService(userProfileRepository)
+	userHandler := handler.NewUserHandler(userService)
 	chatRepository := repository.NewChatRepository(gormDB)
-	chatService := service.NewChatService(chatRepository)
+	userAPIKeyRepository := repository.NewUserAPIKeyRepository(gormDB)
+	modelRegistry := ai.NewModelRegistry()
+	memoryCache := ai.NewMemoryCacheDefault()
+	userAPIKeyService := service.NewUserAPIKeyService(userAPIKeyRepository, modelRegistry, memoryCache, cfg)
+	client := ai.NewClient()
+	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileRepository)
 	chatHandler := handler.NewChatHandler(chatService)
+	userAPIKeyHandler := handler.NewUserAPIKeyHandler(userAPIKeyService)
+	aiHandler := handler.NewAIHandler(userAPIKeyService)
 	dependencies := router.Dependencies{
-		HealthHandler: healthHandler,
-		UserHandler:   userHandler,
-		ChatHandler:   chatHandler,
+		HealthHandler:     healthHandler,
+		UserHandler:       userHandler,
+		ChatHandler:       chatHandler,
+		UserAPIKeyHandler: userAPIKeyHandler,
+		AIHandler:         aiHandler,
 	}
 	engine := router.New(dependencies)
 	return engine, nil

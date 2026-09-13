@@ -14,9 +14,11 @@ import (
 )
 
 type Dependencies struct {
-	HealthHandler *handler.HealthHandler
-	UserHandler   *handler.UserHandler
-	ChatHandler   *handler.ChatHandler
+	HealthHandler     *handler.HealthHandler
+	UserHandler       *handler.UserHandler
+	ChatHandler       *handler.ChatHandler
+	UserAPIKeyHandler *handler.UserAPIKeyHandler
+	AIHandler         *handler.AIHandler
 }
 
 func New(deps Dependencies) *gin.Engine {
@@ -33,7 +35,6 @@ func New(deps Dependencies) *gin.Engine {
 	}))
 
 	engine.GET("/health", deps.HealthHandler.Get)
-	engine.GET("/api/v1/health", deps.HealthHandler.Get)
 
 	// Swagger UI
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -42,6 +43,18 @@ func New(deps Dependencies) *gin.Engine {
 	api.Use(middleware.ClerkAuthMiddleware())
 
 	api.GET("/me", deps.UserHandler.GetMe)
+	api.PUT("/me/system-prompt", deps.UserHandler.UpdateSystemPrompt)
+
+	// AI 関連エンドポイント
+	api.GET("/ai/models", deps.AIHandler.ListModels)
+
+	// ユーザー API キー管理エンドポイント
+	apiKeys := api.Group("/user/api-keys")
+	{
+		apiKeys.POST("", deps.UserAPIKeyHandler.RegisterKey)
+		apiKeys.GET("", deps.UserAPIKeyHandler.ListKeys)
+		apiKeys.DELETE("/:provider", deps.UserAPIKeyHandler.DeleteKey)
+	}
 
 	chats := api.Group("/chats")
 	{
@@ -51,6 +64,7 @@ func New(deps Dependencies) *gin.Engine {
 		chats.GET("/:id", deps.ChatHandler.GetChat)
 		
 		chats.POST("/:id/messages", deps.ChatHandler.SendMessage)
+		chats.POST("/:id/messages/stream", deps.ChatHandler.StreamMessage)
 	}
 
 	return engine
