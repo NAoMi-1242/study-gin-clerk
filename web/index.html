@@ -505,6 +505,22 @@
             },
           });
 
+          // Clerk セッションやトークンが更新されたら再同期
+          Clerk.addListener((emission) => {
+            if (
+              emission.session &&
+              document.getElementById("ai-playground")?.style.display ===
+                "block"
+            ) {
+              getAuthToken().then((t) => {
+                if (t && !isTokenExpired(t)) {
+                  document.getElementById("token").value = t;
+                  updateAuthStatus(t);
+                }
+              });
+            }
+          });
+
           render();
         };
       };
@@ -528,10 +544,13 @@
 
       let isDevTemplate = false;
 
-      async function getAuthToken() {
+      async function getAuthToken(forceRefresh = false) {
         if (!Clerk.session) return null;
         try {
-          const token = await Clerk.session.getToken({ template: "dev" });
+          const token = await Clerk.session.getToken({
+            template: "dev",
+            skipCache: forceRefresh,
+          });
           if (token) {
             isDevTemplate = true;
             return token;
@@ -543,7 +562,35 @@
           );
         }
         isDevTemplate = false;
-        return await Clerk.session.getToken();
+        return await Clerk.session.getToken({ skipCache: forceRefresh });
+      }
+
+      function isTokenExpired(jwt) {
+        if (!jwt) return true;
+        try {
+          const parts = jwt.split(".");
+          if (parts.length < 2) return true;
+          const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
+          if (!payload.exp) return false;
+          // 5秒マージンで判定 (exp は秒単位)
+          return payload.exp * 1000 <= Date.now() + 5000;
+        } catch (e) {
+          return true;
+        }
+      }
+
+      async function getValidAuthToken(maxRetries = 6, delayMs = 500) {
+        for (let i = 0; i < maxRetries; i++) {
+          const token = await getAuthToken(i > 0);
+          if (token && !isTokenExpired(token)) {
+            return token;
+          }
+          if (i < maxRetries - 1) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+        }
+        return await getAuthToken();
       }
 
       async function updateAuthStatus(token) {
@@ -589,8 +636,8 @@
               render();
             });
 
-          // サインイン中は自動的に 24h トークンを取得して Swagger に反映
-          getAuthToken().then((token) => {
+          // サインイン直後・リロード時は有効なトークンの準備を待ってからデータ読み込み
+          getValidAuthToken().then((token) => {
             if (token) {
               document.getElementById("token").value = token;
               updateAuthStatus(token);
@@ -615,14 +662,33 @@
       let currentChatId = null;
 
       async function authFetch(url, options = {}) {
-        const token =
-          document.getElementById("token").value || (await getAuthToken());
+        let token = await getValidAuthToken();
+        if (!token) {
+          token = document.getElementById("token")?.value;
+        }
         if (!token) throw new Error("Not authenticated");
         options.headers = {
           ...(options.headers || {}),
           Authorization: `Bearer ${token}`,
         };
-        return fetch(url, options);
+        let res = await fetch(url, options);
+
+        // 401 (期限切れ) の場合は Clerk のリフレッシュ完了を待機して1回自動再試行
+        if (res.status === 401 && Clerk?.session) {
+          console.warn(
+            "401 Unauthorized. Waiting for Clerk token refresh...",
+            url,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          token = await getValidAuthToken(4, 500);
+          if (token) {
+            document.getElementById("token").value = token;
+            updateAuthStatus(token);
+            options.headers.Authorization = `Bearer ${token}`;
+            res = await fetch(url, options);
+          }
+        }
+        return res;
       }
 
       async function loadRegisteredKeys() {
