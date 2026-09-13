@@ -896,7 +896,11 @@ const docTemplate = `{
                 },
                 "role": {
                     "description": "\"user\", \"assistant\", \"system\"",
-                    "type": "string"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.Role"
+                        }
+                    ]
                 }
             }
         },
@@ -913,6 +917,19 @@ const docTemplate = `{
                 "ProviderOpenAI",
                 "ProviderAnthropic",
                 "ProviderGoogle"
+            ]
+        },
+        "model.Role": {
+            "type": "string",
+            "enum": [
+                "user",
+                "assistant",
+                "system"
+            ],
+            "x-enum-varnames": [
+                "RoleUser",
+                "RoleAssistant",
+                "RoleSystem"
             ]
         },
         "model.UserAPIKey": {

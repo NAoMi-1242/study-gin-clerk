@@ -26,20 +26,20 @@ func NewAIModelService(
 }
 
 // GetAvailableModels retrieves dynamically discovered models for all active providers of the user, using cache.
-func (s *AIModelService) GetAvailableModels(ctx context.Context, userID string, refresh bool) ([]model.AIModelInfo, []model.Provider, error) {
+func (s *AIModelService) GetAvailableModels(ctx context.Context, userID string, refresh bool) ([]model.AIModel, []model.Provider, error) {
 	keys, err := s.userAPIKeyService.GetDecryptedKeys(ctx, userID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var allModels []model.AIModelInfo
+	var allModels []model.AIModel
 	var activeProviders []model.Provider
 
 	for _, k := range keys {
 		activeProviders = append(activeProviders, k.Provider)
 
 		if !refresh {
-			if cached, found := s.cache.Get(userID, string(k.Provider)); found {
+			if cached, found := s.cache.Get(userID, k.Provider); found {
 				allModels = append(allModels, cached...)
 				continue
 			}
@@ -50,7 +50,7 @@ func (s *AIModelService) GetAvailableModels(ctx context.Context, userID string, 
 			continue
 		}
 
-		s.cache.Set(userID, string(k.Provider), models)
+		s.cache.Set(userID, k.Provider, models)
 		allModels = append(allModels, models...)
 	}
 

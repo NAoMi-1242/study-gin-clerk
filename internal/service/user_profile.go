@@ -17,7 +17,7 @@ func NewUserProfileService(userProfileRepo *repository.UserProfileRepository) *U
 
 // GetProfile はユーザーの保存されたシステムプロンプト設定を取得します。
 func (s *UserProfileService) GetProfile(ctx context.Context, userID string) (*model.UserProfile, error) {
-	return s.userProfileRepo.GetProfile(ctx, userID)
+	return s.userProfileRepo.GetByUserID(ctx, userID)
 }
 
 // UpdateSystemPrompt はユーザー共通のシステムプロンプトを更新・保存します。

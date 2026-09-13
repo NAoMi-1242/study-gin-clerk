@@ -44,82 +44,33 @@ func (s *ChatService) CreateChat(ctx context.Context, userID, title string) (*mo
 	if title == "" {
 		title = "新規チャット"
 	}
-	return s.chatRepo.CreateChat(ctx, userID, title)
+	return s.chatRepo.Create(ctx, userID, title)
 }
 
 // ListChats retrieves all conversations for the user.
 func (s *ChatService) ListChats(ctx context.Context, userID string) ([]model.Chat, error) {
-	return s.chatRepo.ListChatsByUserID(ctx, userID)
+	return s.chatRepo.ListByUserID(ctx, userID)
 }
 
 // GetChat retrieves conversation details and message history, enforcing ownership.
 func (s *ChatService) GetChat(ctx context.Context, chatID uint, userID string) (*model.Chat, error) {
-	return s.chatRepo.GetChatWithMessages(ctx, chatID, userID)
+	return s.chatRepo.GetWithMessages(ctx, chatID, userID)
 }
 
-// SendMessage handles saving the user's message, generating an AI reply with GoAI, and saving it to DB.
-func (s *ChatService) SendMessage(
+type chatSessionContext struct {
+	chat         *model.Chat
+	apiKey       string
+	userMsg      *model.Message
+	systemPrompt string
+}
+
+func (s *ChatService) prepareSessionContext(
 	ctx context.Context,
 	chatID uint,
 	userID, content string,
 	providerName model.Provider,
 	modelID string,
-) (*model.Message, *model.Message, error) {
-	if !providerName.IsValid() {
-		return nil, nil, fmt.Errorf("unsupported provider: '%s'", providerName)
-	}
-	if modelID == "" {
-		return nil, nil, fmt.Errorf("model is required")
-	}
-
-	// 1. チャットの所有権と過去メッセージを取得
-	chat, err := s.chatRepo.GetChatWithMessages(ctx, chatID, userID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("chat not found or unauthorized: %w", err)
-	}
-
-	// 2. ユーザーの API キーを復号して取得
-	apiKey, err := s.userAPIKeyService.GetDecryptedKey(ctx, userID, providerName)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// 3. ユーザーのメッセージを DB 保存
-	userMsg, err := s.chatRepo.CreateMessage(ctx, chatID, "user", content)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to save user message: %w", err)
-	}
-
-	// 4. ユーザーの最新システムプロンプトを取得 (常に最新の共通設定を動的適用)
-	userProfile, _ := s.userProfileService.GetProfile(ctx, userID)
-	systemPrompt := ""
-	if userProfile != nil {
-		systemPrompt = userProfile.SystemPrompt
-	}
-
-	// 5. GoAI SDK を用いて AI の返答を生成
-	aiContent, err := s.aiClient.GenerateReply(ctx, providerName, modelID, apiKey, systemPrompt, chat.Messages, content)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate AI reply: %w", err)
-	}
-
-	// 6. AI の返答メッセージを DB 保存
-	aiMsg, err := s.chatRepo.CreateMessage(ctx, chatID, "assistant", aiContent)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to save assistant message: %w", err)
-	}
-
-	return userMsg, aiMsg, nil
-}
-
-// StreamMessage prepares a streaming response using GoAI StreamText.
-func (s *ChatService) StreamMessage(
-	ctx context.Context,
-	chatID uint,
-	userID, content string,
-	providerName model.Provider,
-	modelID string,
-) (*StreamMessageResult, error) {
+) (*chatSessionContext, error) {
 	if !providerName.IsValid() {
 		return nil, fmt.Errorf("unsupported provider: '%s'", providerName)
 	}
@@ -127,8 +78,8 @@ func (s *ChatService) StreamMessage(
 		return nil, fmt.Errorf("model is required")
 	}
 
-	// 1. チャットの所有権と過去履歴を取得
-	chat, err := s.chatRepo.GetChatWithMessages(ctx, chatID, userID)
+	// 1. チャットの所有権と過去メッセージ履歴を取得
+	chat, err := s.chatRepo.GetWithMessages(ctx, chatID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("chat not found or unauthorized: %w", err)
 	}
@@ -140,7 +91,7 @@ func (s *ChatService) StreamMessage(
 	}
 
 	// 3. ユーザーのメッセージを DB 保存
-	userMsg, err := s.chatRepo.CreateMessage(ctx, chatID, "user", content)
+	userMsg, err := s.chatRepo.CreateMessage(ctx, chatID, model.RoleUser, content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
@@ -152,19 +103,84 @@ func (s *ChatService) StreamMessage(
 		systemPrompt = userProfile.SystemPrompt
 	}
 
-	// 5. GoAI StreamText を呼び出し
-	stream, err := s.aiClient.StreamReply(ctx, providerName, modelID, apiKey, systemPrompt, chat.Messages, content)
+	return &chatSessionContext{
+		chat:         chat,
+		apiKey:       apiKey,
+		userMsg:      userMsg,
+		systemPrompt: systemPrompt,
+	}, nil
+}
+
+// SendMessage handles saving the user's message, generating an AI reply with GoAI, and saving it to DB.
+func (s *ChatService) SendMessage(
+	ctx context.Context,
+	chatID uint,
+	userID, content string,
+	providerName model.Provider,
+	modelID string,
+) (*model.Message, *model.Message, error) {
+	session, err := s.prepareSessionContext(ctx, chatID, userID, content, providerName, modelID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// GoAI SDK を用いて AI の返答を生成
+	aiContent, err := s.aiClient.GenerateReply(
+		ctx,
+		providerName,
+		modelID,
+		session.apiKey,
+		session.systemPrompt,
+		session.chat.Messages,
+		content,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate AI reply: %w", err)
+	}
+
+	// AI の返答メッセージを DB 保存
+	aiMsg, err := s.chatRepo.CreateMessage(ctx, chatID, model.RoleAssistant, aiContent)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to save assistant message: %w", err)
+	}
+
+	return session.userMsg, aiMsg, nil
+}
+
+// StreamMessage prepares a streaming response using GoAI StreamText.
+func (s *ChatService) StreamMessage(
+	ctx context.Context,
+	chatID uint,
+	userID, content string,
+	providerName model.Provider,
+	modelID string,
+) (*StreamMessageResult, error) {
+	session, err := s.prepareSessionContext(ctx, chatID, userID, content, providerName, modelID)
+	if err != nil {
+		return nil, err
+	}
+
+	// GoAI StreamText を呼び出し
+	stream, err := s.aiClient.StreamReply(
+		ctx,
+		providerName,
+		modelID,
+		session.apiKey,
+		session.systemPrompt,
+		session.chat.Messages,
+		content,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate AI stream: %w", err)
 	}
 
-	// 6. ストリーム完了時に呼び出す DB 保存コールバック
+	// ストリーム完了時に呼び出す DB 保存コールバック
 	onComplete := func(fullText string) (*model.Message, error) {
-		return s.chatRepo.CreateMessage(context.Background(), chatID, "assistant", fullText)
+		return s.chatRepo.CreateMessage(context.Background(), chatID, model.RoleAssistant, fullText)
 	}
 
 	return &StreamMessageResult{
-		UserMessage: userMsg,
+		UserMessage: session.userMsg,
 		TextStream:  stream,
 		OnComplete:  onComplete,
 	}, nil

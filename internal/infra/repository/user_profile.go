@@ -18,8 +18,8 @@ func NewUserProfileRepository(db *gorm.DB) *UserProfileRepository {
 	return &UserProfileRepository{db: db}
 }
 
-// GetProfile retrieves user profile by userID, returning a default profile if not found.
-func (r *UserProfileRepository) GetProfile(ctx context.Context, userID string) (*model.UserProfile, error) {
+// GetByUserID retrieves user profile by userID, returning a default profile if not found.
+func (r *UserProfileRepository) GetByUserID(ctx context.Context, userID string) (*model.UserProfile, error) {
 	var profile model.UserProfile
 	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error
 	if err != nil {

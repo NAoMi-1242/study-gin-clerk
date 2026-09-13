@@ -6,9 +6,9 @@ import "github.com/google/wire"
 var Set = wire.NewSet(
 	NewHealthHandler,
 	NewUserProfileHandler,
-	NewChatHandler,
 	NewUserAPIKeyHandler,
 	NewAIModelHandler,
+	NewChatHandler,
 )
 
 

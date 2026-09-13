@@ -17,8 +17,8 @@ func NewChatRepository(db *gorm.DB) *ChatRepository {
 	return &ChatRepository{db: db}
 }
 
-// CreateChat creates a new chat session for a user.
-func (r *ChatRepository) CreateChat(ctx context.Context, userID, title string) (*model.Chat, error) {
+// Create creates a new chat session for a user.
+func (r *ChatRepository) Create(ctx context.Context, userID, title string) (*model.Chat, error) {
 	chat := &model.Chat{
 		UserID: userID,
 		Title:  title,
@@ -29,8 +29,8 @@ func (r *ChatRepository) CreateChat(ctx context.Context, userID, title string) (
 	return chat, nil
 }
 
-// ListChatsByUserID retrieves all chats owned by the specified user.
-func (r *ChatRepository) ListChatsByUserID(ctx context.Context, userID string) ([]model.Chat, error) {
+// ListByUserID retrieves all chats owned by the specified user.
+func (r *ChatRepository) ListByUserID(ctx context.Context, userID string) ([]model.Chat, error) {
 	var chats []model.Chat
 	err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
@@ -42,8 +42,8 @@ func (r *ChatRepository) ListChatsByUserID(ctx context.Context, userID string) (
 	return chats, nil
 }
 
-// GetChatWithMessages retrieves a single chat and its messages, enforcing user ownership.
-func (r *ChatRepository) GetChatWithMessages(ctx context.Context, chatID uint, userID string) (*model.Chat, error) {
+// GetWithMessages retrieves a single chat and its messages, enforcing user ownership.
+func (r *ChatRepository) GetWithMessages(ctx context.Context, chatID uint, userID string) (*model.Chat, error) {
 	var chat model.Chat
 	err := r.db.WithContext(ctx).
 		Preload("Messages", func(db *gorm.DB) *gorm.DB {
@@ -58,7 +58,7 @@ func (r *ChatRepository) GetChatWithMessages(ctx context.Context, chatID uint, u
 }
 
 // CreateMessage adds a new message to a chat and updates the chat's updated_at timestamp.
-func (r *ChatRepository) CreateMessage(ctx context.Context, chatID uint, role, content string) (*model.Message, error) {
+func (r *ChatRepository) CreateMessage(ctx context.Context, chatID uint, role model.Role, content string) (*model.Message, error) {
 	msg := &model.Message{
 		ChatID:  chatID,
 		Role:    role,
