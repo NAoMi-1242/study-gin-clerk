@@ -17,11 +17,11 @@ import (
 
 type Dependencies struct {
 	Config            config.Config
-	HealthHandler     *handler.HealthHandler
-	UserHandler       *handler.UserHandler
-	ChatHandler       *handler.ChatHandler
+	HealthHandler      *handler.HealthHandler
+	UserProfileHandler *handler.UserProfileHandler
+	ChatHandler        *handler.ChatHandler
 	UserAPIKeyHandler *handler.UserAPIKeyHandler
-	AIHandler         *handler.AIHandler
+	AIModelHandler    *handler.AIModelHandler
 }
 
 func New(deps Dependencies) *gin.Engine {
@@ -55,8 +55,8 @@ func New(deps Dependencies) *gin.Engine {
 	// 自身のアカウント・設定関連エンドポイント
 	me := api.Group("/me")
 	{
-		me.GET("", deps.UserHandler.GetMe)
-		me.PUT("/system-prompt", deps.UserHandler.UpdateSystemPrompt)
+		me.GET("", deps.UserProfileHandler.GetMe)
+		me.PUT("/system-prompt", deps.UserProfileHandler.UpdateSystemPrompt)
 
 		apiKeys := me.Group("/api-keys")
 		{
@@ -66,8 +66,8 @@ func New(deps Dependencies) *gin.Engine {
 		}
 	}
 
-	// AI 関連エンドポイント
-	api.GET("/ai/models", deps.AIHandler.ListModels)
+	// AI モデル関連エンドポイント
+	api.GET("/ai/models", deps.AIModelHandler.ListModels)
 
 	chats := api.Group("/chats")
 	{

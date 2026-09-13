@@ -151,7 +151,7 @@ paths:
       - BearerAuth: []
       summary: 利用可能モデル一覧取得 (動的取得 & キャッシュ)
       tags:
-      - ai
+      - ai_models
   /api/v1/chats:
     get:
       description: 認証済みユーザーが作成したチャット一覧を取得します
@@ -432,7 +432,7 @@ paths:
       - BearerAuth: []
       summary: 自分のプロファイル取得
       tags:
-      - users
+      - user_profiles
   /api/v1/me/api-keys:
     get:
       description: ユーザーが登録した各社 API キーの一覧（マスクされた key_hint のみ）を取得します。
@@ -595,7 +595,7 @@ paths:
       - BearerAuth: []
       summary: システムプロンプト更新
       tags:
-      - users
+      - user_profiles
   /health:
     get:
       description: サーバーおよびデータベースの稼働状態を確認します

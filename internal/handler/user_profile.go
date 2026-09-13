@@ -10,20 +10,20 @@ import (
 	"study-gin-clerk/internal/service"
 )
 
-type UserHandler struct {
-	userService *service.UserService
+type UserProfileHandler struct {
+	profileService *service.UserProfileService
 }
 
-func NewUserHandler(userService *service.UserService) *UserHandler {
-	return &UserHandler{
-		userService: userService,
+func NewUserProfileHandler(profileService *service.UserProfileService) *UserProfileHandler {
+	return &UserProfileHandler{
+		profileService: profileService,
 	}
 }
 
 // GetMe godoc
 // @Summary 自分のプロファイル取得
 // @Description 認証済みユーザーのプロファイル情報およびシステムプロンプトを取得します
-// @Tags users
+// @Tags user_profiles
 // @Security BearerAuth
 // @Produce json
 // @Success 200 {object} model.UserProfile
@@ -31,10 +31,10 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 // @Failure 403 {object} map[string]string "認可エラー・トークン不正"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/me [get]
-func (h *UserHandler) GetMe(c *gin.Context) {
+func (h *UserProfileHandler) GetMe(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
-	profile, err := h.userService.GetProfile(c.Request.Context(), userID)
+	profile, err := h.profileService.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		slog.Error("failed to get profile", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -53,7 +53,7 @@ type UpdateSystemPromptRequest struct {
 // UpdateSystemPrompt godoc
 // @Summary システムプロンプト更新
 // @Description ユーザー共通のデフォルトシステムプロンプトを更新・保存します
-// @Tags users
+// @Tags user_profiles
 // @Security BearerAuth
 // @Accept json
 // @Produce json
@@ -63,7 +63,7 @@ type UpdateSystemPromptRequest struct {
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/me/system-prompt [put]
-func (h *UserHandler) UpdateSystemPrompt(c *gin.Context) {
+func (h *UserProfileHandler) UpdateSystemPrompt(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
 	var req UpdateSystemPromptRequest
@@ -72,7 +72,7 @@ func (h *UserHandler) UpdateSystemPrompt(c *gin.Context) {
 		return
 	}
 
-	profile, err := h.userService.UpdateSystemPrompt(c.Request.Context(), userID, req.SystemPrompt)
+	profile, err := h.profileService.UpdateSystemPrompt(c.Request.Context(), userID, req.SystemPrompt)
 	if err != nil {
 		slog.Error("failed to update system prompt", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update system prompt"})
@@ -81,3 +81,4 @@ func (h *UserHandler) UpdateSystemPrompt(c *gin.Context) {
 
 	c.JSON(http.StatusOK, profile)
 }
+
