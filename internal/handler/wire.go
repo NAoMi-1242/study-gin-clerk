@@ -10,5 +10,3 @@ var Set = wire.NewSet(
 	NewAIModelHandler,
 	NewChatHandler,
 )
-
-

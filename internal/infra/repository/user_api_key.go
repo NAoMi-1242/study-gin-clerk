@@ -65,4 +65,3 @@ func (r *UserAPIKeyRepository) DeleteByProvider(ctx context.Context, userID stri
 	}
 	return nil
 }
-

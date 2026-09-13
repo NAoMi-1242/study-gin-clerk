@@ -7,4 +7,3 @@ var Set = wire.NewSet(
 	wire.Struct(new(Dependencies), "*"),
 	New,
 )
-

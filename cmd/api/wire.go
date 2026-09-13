@@ -10,6 +10,7 @@ import (
 	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/handler"
 	"study-gin-clerk/internal/infra/ai"
+	"study-gin-clerk/internal/infra/crypto"
 	"study-gin-clerk/internal/infra/db"
 	"study-gin-clerk/internal/infra/repository"
 	"study-gin-clerk/internal/router"
@@ -19,6 +20,7 @@ import (
 func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	wire.Build(
 		db.Set,
+		crypto.Set,
 		ai.Set,
 		repository.Set,
 		service.Set,
@@ -27,4 +29,3 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	)
 	return nil, nil, nil
 }
-

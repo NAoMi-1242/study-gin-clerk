@@ -103,4 +103,3 @@ func (c *MemoryCache) startCleanup(interval time.Duration) {
 		c.mu.Unlock()
 	}
 }
-

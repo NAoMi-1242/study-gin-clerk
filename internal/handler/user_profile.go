@@ -81,4 +81,3 @@ func (h *UserProfileHandler) UpdateSystemPrompt(c *gin.Context) {
 
 	c.JSON(http.StatusOK, profile)
 }
-

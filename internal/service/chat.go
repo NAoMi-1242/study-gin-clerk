@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/zendev-sh/goai"
+	"gorm.io/gorm"
 
 	"study-gin-clerk/internal/infra/ai"
 	"study-gin-clerk/internal/infra/repository"
@@ -54,7 +56,14 @@ func (s *ChatService) ListChats(ctx context.Context, userID string) ([]model.Cha
 
 // GetChat retrieves conversation details and message history, enforcing ownership.
 func (s *ChatService) GetChat(ctx context.Context, chatID uint, userID string) (*model.Chat, error) {
-	return s.chatRepo.GetWithMessages(ctx, chatID, userID)
+	chat, err := s.chatRepo.GetWithMessages(ctx, chatID, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChatNotFound
+		}
+		return nil, err
+	}
+	return chat, nil
 }
 
 type chatSessionContext struct {
@@ -72,16 +81,19 @@ func (s *ChatService) prepareSessionContext(
 	modelID string,
 ) (*chatSessionContext, error) {
 	if !providerName.IsValid() {
-		return nil, fmt.Errorf("unsupported provider: '%s'", providerName)
+		return nil, fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, providerName)
 	}
 	if modelID == "" {
-		return nil, fmt.Errorf("model is required")
+		return nil, fmt.Errorf("%w: model is required", ErrValidationFailed)
 	}
 
 	// 1. チャットの所有権と過去メッセージ履歴を取得
 	chat, err := s.chatRepo.GetWithMessages(ctx, chatID, userID)
 	if err != nil {
-		return nil, fmt.Errorf("chat not found or unauthorized: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChatNotFound
+		}
+		return nil, fmt.Errorf("failed to retrieve chat: %w", err)
 	}
 
 	// 2. ユーザーの API キーを復号して取得
@@ -135,7 +147,7 @@ func (s *ChatService) SendMessage(
 		content,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate AI reply: %w", err)
+		return nil, nil, fmt.Errorf("%w: %s", ErrAIProvider, err.Error())
 	}
 
 	// AI の返答メッセージを DB 保存
@@ -171,7 +183,7 @@ func (s *ChatService) StreamMessage(
 		content,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initiate AI stream: %w", err)
+		return nil, fmt.Errorf("%w: %s", ErrAIProvider, err.Error())
 	}
 
 	// ストリーム完了時に呼び出す DB 保存コールバック

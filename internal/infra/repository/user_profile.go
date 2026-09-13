@@ -31,19 +31,10 @@ func (r *UserProfileRepository) GetByUserID(ctx context.Context, userID string) 
 	return &profile, nil
 }
 
-// UpsertSystemPrompt updates or creates the user's system prompt.
-func (r *UserProfileRepository) UpsertSystemPrompt(ctx context.Context, userID, systemPrompt string) (*model.UserProfile, error) {
-	profile := &model.UserProfile{
-		UserID:       userID,
-		SystemPrompt: systemPrompt,
-	}
-	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+// Upsert updates or creates the user's profile.
+func (r *UserProfileRepository) Upsert(ctx context.Context, profile *model.UserProfile) error {
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "user_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"system_prompt", "updated_at"}),
 	}).Create(profile).Error
-	if err != nil {
-		return nil, err
-	}
-	return profile, nil
 }
-

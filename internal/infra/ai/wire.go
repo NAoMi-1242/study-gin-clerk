@@ -8,4 +8,3 @@ var Set = wire.NewSet(
 	NewModelRegistry,
 	NewClient,
 )
-

@@ -22,6 +22,12 @@ func (s *UserProfileService) GetProfile(ctx context.Context, userID string) (*mo
 
 // UpdateSystemPrompt はユーザー共通のシステムプロンプトを更新・保存します。
 func (s *UserProfileService) UpdateSystemPrompt(ctx context.Context, userID, systemPrompt string) (*model.UserProfile, error) {
-	return s.userProfileRepo.UpsertSystemPrompt(ctx, userID, systemPrompt)
+	profile := &model.UserProfile{
+		UserID:       userID,
+		SystemPrompt: systemPrompt,
+	}
+	if err := s.userProfileRepo.Upsert(ctx, profile); err != nil {
+		return nil, err
+	}
+	return profile, nil
 }
-

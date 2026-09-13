@@ -45,4 +45,3 @@ func (h *AIModelHandler) ListModels(c *gin.Context) {
 		"models":           models,
 	})
 }
-

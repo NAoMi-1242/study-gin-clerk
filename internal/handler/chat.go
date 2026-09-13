@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -106,7 +107,12 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 
 	chat, err := h.chatService.GetChat(c.Request.Context(), chatID, userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
+		if errors.Is(err, service.ErrChatNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
+			return
+		}
+		slog.Error("failed to get chat", "error", err, "user_id", userID, "chat_id", chatID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get chat"})
 		return
 	}
 
@@ -117,6 +123,29 @@ type SendMessageRequest struct {
 	Content  string         `json:"content" binding:"required,max=30000"`
 	Provider model.Provider `json:"provider" binding:"required"`
 	Model    string         `json:"model" binding:"required,max=100"`
+}
+
+func (h *ChatHandler) parseSendMessageRequest(c *gin.Context) (uint, *SendMessageRequest, bool) {
+	chatID, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid chat id"})
+		return 0, nil, false
+	}
+
+	var req SendMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content (max 30000 chars), provider, and model are required"})
+		return 0, nil, false
+	}
+
+	provider, err := model.ParseProvider(string(req.Provider))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return 0, nil, false
+	}
+	req.Provider = provider
+
+	return chatID, &req, true
 }
 
 // SendMessage godoc
@@ -138,24 +167,10 @@ type SendMessageRequest struct {
 func (h *ChatHandler) SendMessage(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
-	chatID, err := parseUintParam(c, "id")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid chat id"})
+	chatID, req, ok := h.parseSendMessageRequest(c)
+	if !ok {
 		return
 	}
-
-	var req SendMessageRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "content (max 30000 chars), provider, and model are required"})
-		return
-	}
-
-	provider, err := model.ParseProvider(string(req.Provider))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	req.Provider = provider
 
 	userMsg, aiMsg, err := h.chatService.SendMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
 	if err != nil {
@@ -188,24 +203,10 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 func (h *ChatHandler) StreamMessage(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
-	chatID, err := parseUintParam(c, "id")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid chat id"})
+	chatID, req, ok := h.parseSendMessageRequest(c)
+	if !ok {
 		return
 	}
-
-	var req SendMessageRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "content (max 30000 chars), provider, and model are required"})
-		return
-	}
-
-	provider, err := model.ParseProvider(string(req.Provider))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	req.Provider = provider
 
 	streamResult, err := h.chatService.StreamMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
 	if err != nil {
@@ -256,16 +257,15 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 }
 
 func handleChatError(c *gin.Context, err error, userID string, chatID uint) {
-	errStr := err.Error()
-	if strings.Contains(errStr, "chat not found") {
+	if errors.Is(err, service.ErrChatNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
 		return
 	}
-	if strings.Contains(errStr, "is not registered") || strings.Contains(errStr, "required") || strings.Contains(errStr, "unsupported provider") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errStr})
+	if errors.Is(err, service.ErrKeyNotRegistered) || errors.Is(err, service.ErrValidationFailed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if strings.Contains(errStr, "AI generation failed") || strings.Contains(errStr, "failed to initiate AI stream") {
+	if errors.Is(err, service.ErrAIProvider) {
 		slog.Error("AI provider error", "error", err, "user_id", userID, "chat_id", chatID)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "AI provider communication failed. Please verify your API key and model settings"})
 		return

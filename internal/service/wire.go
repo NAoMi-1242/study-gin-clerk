@@ -9,5 +9,3 @@ var Set = wire.NewSet(
 	NewAIModelService,
 	NewChatService,
 )
-
-

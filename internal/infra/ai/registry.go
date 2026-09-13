@@ -258,4 +258,3 @@ func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([
 	}
 	return models, nil
 }
-
