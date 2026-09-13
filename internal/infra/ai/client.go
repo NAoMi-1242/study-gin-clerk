@@ -14,8 +14,14 @@ import (
 	"github.com/zendev-sh/goai/provider/openrouter"
 
 	"study-gin-clerk/internal/config"
-	"study-gin-clerk/internal/model"
+	"study-gin-clerk/internal/types"
 )
+
+// ChatMessage represents a generic message passed to the AI client.
+type ChatMessage struct {
+	Role    string
+	Content string
+}
 
 type Client struct {
 	cfg config.Config
@@ -26,7 +32,7 @@ func NewClient(cfg config.Config) *Client {
 }
 
 // CreateModel builds the appropriate GoAI provider.LanguageModel.
-func (c *Client) CreateModel(providerName model.Provider, modelID, apiKey string) (provider.LanguageModel, error) {
+func (c *Client) CreateModel(providerName types.Provider, modelID, apiKey string) (provider.LanguageModel, error) {
 	modelID = strings.TrimSpace(modelID)
 	apiKey = strings.TrimSpace(apiKey)
 
@@ -38,7 +44,7 @@ func (c *Client) CreateModel(providerName model.Provider, modelID, apiKey string
 	}
 
 	switch providerName {
-	case model.ProviderOpenRouter:
+	case types.ProviderOpenRouter:
 		referer := c.cfg.AppURL
 		if referer == "" {
 			referer = "http://localhost:3000"
@@ -51,11 +57,11 @@ func (c *Client) CreateModel(providerName model.Provider, modelID, apiKey string
 				"X-Title":      "Study Gin Clerk",
 			}),
 		), nil
-	case model.ProviderOpenAI:
+	case types.ProviderOpenAI:
 		return openai.Chat(modelID, openai.WithAPIKey(apiKey)), nil
-	case model.ProviderAnthropic:
+	case types.ProviderAnthropic:
 		return anthropic.Chat(modelID, anthropic.WithAPIKey(apiKey)), nil
-	case model.ProviderGoogle:
+	case types.ProviderGoogle:
 		return google.Chat(modelID, google.WithAPIKey(apiKey)), nil
 	default:
 		return nil, fmt.Errorf("unsupported AI provider: '%s'", providerName)
@@ -63,18 +69,18 @@ func (c *Client) CreateModel(providerName model.Provider, modelID, apiKey string
 }
 
 // buildMessages converts system prompt, past DB messages, and the new user prompt into GoAI provider.Message slice.
-func (c *Client) buildMessages(systemPrompt string, history []model.Message, prompt string) []provider.Message {
+func (c *Client) buildMessages(systemPrompt string, history []ChatMessage, prompt string) []provider.Message {
 	var msgs []provider.Message
 	if trimmed := strings.TrimSpace(systemPrompt); trimmed != "" {
 		msgs = append(msgs, goai.SystemMessage(trimmed))
 	}
 	for _, m := range history {
 		switch m.Role {
-		case model.RoleUser:
+		case "user":
 			msgs = append(msgs, goai.UserMessage(m.Content))
-		case model.RoleAssistant:
+		case "assistant":
 			msgs = append(msgs, goai.AssistantMessage(m.Content))
-		case model.RoleSystem:
+		case "system":
 			msgs = append(msgs, goai.SystemMessage(m.Content))
 		}
 	}
@@ -84,7 +90,7 @@ func (c *Client) buildMessages(systemPrompt string, history []model.Message, pro
 	return msgs
 }
 
-func formatAIError(providerName model.Provider, modelID string, err error) error {
+func formatAIError(providerName types.Provider, modelID string, err error) error {
 	var apiErr *goai.APIError
 	if errors.As(err, &apiErr) {
 		var details []string
@@ -105,9 +111,9 @@ func formatAIError(providerName model.Provider, modelID string, err error) error
 // GenerateReply generates a complete AI response synchronously.
 func (c *Client) GenerateReply(
 	ctx context.Context,
-	providerName model.Provider,
+	providerName types.Provider,
 	modelID, apiKey, systemPrompt string,
-	history []model.Message,
+	history []ChatMessage,
 	prompt string,
 ) (string, error) {
 	langModel, err := c.CreateModel(providerName, modelID, apiKey)
@@ -127,9 +133,9 @@ func (c *Client) GenerateReply(
 // StreamReply starts a streaming text generation using GoAI StreamText.
 func (c *Client) StreamReply(
 	ctx context.Context,
-	providerName model.Provider,
+	providerName types.Provider,
 	modelID, apiKey, systemPrompt string,
-	history []model.Message,
+	history []ChatMessage,
 	prompt string,
 ) (*goai.TextStream, error) {
 	langModel, err := c.CreateModel(providerName, modelID, apiKey)

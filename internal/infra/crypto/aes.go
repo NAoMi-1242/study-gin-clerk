@@ -103,21 +103,3 @@ func decryptWithBytes(cipherTextBase64 string, keyBytes []byte) (string, error) 
 
 	return string(plainTextBytes), nil
 }
-
-// Encrypt encrypts plainText using AES-256-GCM and returns a Base64-encoded string.
-func Encrypt(plainText, keyStr string) (string, error) {
-	keyBytes, err := parseKey(keyStr)
-	if err != nil {
-		return "", err
-	}
-	return encryptWithBytes([]byte(plainText), keyBytes)
-}
-
-// Decrypt decrypts a Base64-encoded string using AES-256-GCM.
-func Decrypt(cipherTextBase64, keyStr string) (string, error) {
-	keyBytes, err := parseKey(keyStr)
-	if err != nil {
-		return "", err
-	}
-	return decryptWithBytes(cipherTextBase64, keyBytes)
-}

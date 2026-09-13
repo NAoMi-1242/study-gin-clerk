@@ -1,4 +1,4 @@
-package handler
+package aimodel
 
 import (
 	"log/slog"
@@ -7,15 +7,14 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"study-gin-clerk/internal/auth"
-	"study-gin-clerk/internal/service"
 )
 
-type AIModelHandler struct {
-	aiModelService *service.AIModelService
+type Handler struct {
+	service *Service
 }
 
-func NewAIModelHandler(aiModelService *service.AIModelService) *AIModelHandler {
-	return &AIModelHandler{aiModelService: aiModelService}
+func NewHandler(service *Service) *Handler {
+	return &Handler{service: service}
 }
 
 // ListModels godoc
@@ -29,11 +28,11 @@ func NewAIModelHandler(aiModelService *service.AIModelService) *AIModelHandler {
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/ai/models [get]
-func (h *AIModelHandler) ListModels(c *gin.Context) {
+func (h *Handler) ListModels(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 	refresh := c.Query("refresh") == "true"
 
-	models, activeProviders, err := h.aiModelService.GetAvailableModels(c.Request.Context(), userID, refresh)
+	models, activeProviders, err := h.service.GetAvailableModels(c.Request.Context(), userID, refresh)
 	if err != nil {
 		slog.Error("failed to retrieve models", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve models"})
@@ -45,3 +44,4 @@ func (h *AIModelHandler) ListModels(c *gin.Context) {
 		"models":           models,
 	})
 }
+

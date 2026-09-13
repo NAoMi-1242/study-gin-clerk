@@ -90,7 +90,7 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/model.Chat"
+                                    "$ref": "#/definitions/chat.Chat"
                                 }
                             }
                         }
@@ -147,7 +147,7 @@ const docTemplate = `{
                         "name": "request",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/handler.CreateChatRequest"
+                            "$ref": "#/definitions/chat.CreateChatRequest"
                         }
                     }
                 ],
@@ -155,7 +155,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/model.Chat"
+                            "$ref": "#/definitions/chat.Chat"
                         }
                     },
                     "400": {
@@ -225,7 +225,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.Chat"
+                            "$ref": "#/definitions/chat.Chat"
                         }
                     },
                     "400": {
@@ -299,7 +299,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.SendMessageRequest"
+                            "$ref": "#/definitions/chat.SendMessageRequest"
                         }
                     }
                 ],
@@ -309,7 +309,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
-                                "$ref": "#/definitions/model.Message"
+                                "$ref": "#/definitions/chat.Message"
                             }
                         }
                     },
@@ -393,7 +393,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.SendMessageRequest"
+                            "$ref": "#/definitions/chat.SendMessageRequest"
                         }
                     }
                 ],
@@ -471,7 +471,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.UserProfile"
+                            "$ref": "#/definitions/profile.Profile"
                         }
                     },
                     "401": {
@@ -527,7 +527,7 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/model.UserAPIKey"
+                                    "$ref": "#/definitions/apikey.Key"
                                 }
                             }
                         }
@@ -576,7 +576,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.RegisterAPIKeyRequest"
+                            "$ref": "#/definitions/apikey.RegisterAPIKeyRequest"
                         }
                     }
                 ],
@@ -718,7 +718,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.UpdateSystemPromptRequest"
+                            "$ref": "#/definitions/profile.UpdateSystemPromptRequest"
                         }
                     }
                 ],
@@ -726,7 +726,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.UserProfile"
+                            "$ref": "#/definitions/profile.Profile"
                         }
                     },
                     "400": {
@@ -793,16 +793,36 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "handler.CreateChatRequest": {
+        "apikey.Key": {
             "type": "object",
             "properties": {
-                "title": {
-                    "type": "string",
-                    "maxLength": 255
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "key_hint": {
+                    "description": "Masked representation for display (e.g. \"sk-or-v1-...1234\")",
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Provider"
+                        }
+                    ]
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
                 }
             }
         },
-        "handler.RegisterAPIKeyRequest": {
+        "apikey.RegisterAPIKeyRequest": {
             "type": "object",
             "required": [
                 "api_key",
@@ -817,43 +837,13 @@ const docTemplate = `{
                     "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/model.Provider"
+                            "$ref": "#/definitions/types.Provider"
                         }
                     ]
                 }
             }
         },
-        "handler.SendMessageRequest": {
-            "type": "object",
-            "required": [
-                "content",
-                "model",
-                "provider"
-            ],
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "maxLength": 30000
-                },
-                "model": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "provider": {
-                    "$ref": "#/definitions/model.Provider"
-                }
-            }
-        },
-        "handler.UpdateSystemPromptRequest": {
-            "type": "object",
-            "properties": {
-                "system_prompt": {
-                    "type": "string",
-                    "maxLength": 10000
-                }
-            }
-        },
-        "model.Chat": {
+        "chat.Chat": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -865,7 +855,7 @@ const docTemplate = `{
                 "messages": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/model.Message"
+                        "$ref": "#/definitions/chat.Message"
                     }
                 },
                 "title": {
@@ -879,7 +869,16 @@ const docTemplate = `{
                 }
             }
         },
-        "model.Message": {
+        "chat.CreateChatRequest": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
+        "chat.Message": {
             "type": "object",
             "properties": {
                 "chat_id": {
@@ -898,28 +897,13 @@ const docTemplate = `{
                     "description": "\"user\", \"assistant\", \"system\"",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/model.Role"
+                            "$ref": "#/definitions/chat.Role"
                         }
                     ]
                 }
             }
         },
-        "model.Provider": {
-            "type": "string",
-            "enum": [
-                "openrouter",
-                "openai",
-                "anthropic",
-                "google"
-            ],
-            "x-enum-varnames": [
-                "ProviderOpenRouter",
-                "ProviderOpenAI",
-                "ProviderAnthropic",
-                "ProviderGoogle"
-            ]
-        },
-        "model.Role": {
+        "chat.Role": {
             "type": "string",
             "enum": [
                 "user",
@@ -932,36 +916,28 @@ const docTemplate = `{
                 "RoleSystem"
             ]
         },
-        "model.UserAPIKey": {
+        "chat.SendMessageRequest": {
             "type": "object",
+            "required": [
+                "content",
+                "model",
+                "provider"
+            ],
             "properties": {
-                "created_at": {
-                    "type": "string"
+                "content": {
+                    "type": "string",
+                    "maxLength": 30000
                 },
-                "id": {
-                    "type": "integer"
-                },
-                "key_hint": {
-                    "description": "Masked representation for display (e.g. \"sk-or-v1-...1234\")",
-                    "type": "string"
+                "model": {
+                    "type": "string",
+                    "maxLength": 100
                 },
                 "provider": {
-                    "description": "ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.Provider"
-                        }
-                    ]
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.Provider"
                 }
             }
         },
-        "model.UserProfile": {
+        "profile.Profile": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -977,6 +953,30 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "profile.UpdateSystemPromptRequest": {
+            "type": "object",
+            "properties": {
+                "system_prompt": {
+                    "type": "string",
+                    "maxLength": 10000
+                }
+            }
+        },
+        "types.Provider": {
+            "type": "string",
+            "enum": [
+                "openrouter",
+                "openai",
+                "anthropic",
+                "google"
+            ],
+            "x-enum-varnames": [
+                "ProviderOpenRouter",
+                "ProviderOpenAI",
+                "ProviderAnthropic",
+                "ProviderGoogle"
+            ]
         }
     },
     "securityDefinitions": {

@@ -5,19 +5,20 @@ import (
 	"sync"
 	"time"
 
-	"study-gin-clerk/internal/model"
+	"study-gin-clerk/internal/types"
 )
 
 type cacheItem struct {
-	models    []model.AIModel
+	models    []types.AIModel
 	expiresAt time.Time
 }
 
 // MemoryCache provides thread-safe in-memory caching for model lists partitioned by (userID, provider).
 type MemoryCache struct {
-	mu    sync.RWMutex
-	items map[string]cacheItem
-	ttl   time.Duration
+	mu     sync.RWMutex
+	items  map[string]cacheItem
+	ttl    time.Duration
+	stopCh chan struct{}
 }
 
 // NewMemoryCache creates a new MemoryCache with the specified TTL.
@@ -26,8 +27,9 @@ func NewMemoryCache(ttl time.Duration) *MemoryCache {
 		ttl = 15 * time.Minute
 	}
 	c := &MemoryCache{
-		items: make(map[string]cacheItem),
-		ttl:   ttl,
+		items:  make(map[string]cacheItem),
+		ttl:    ttl,
+		stopCh: make(chan struct{}),
 	}
 
 	// Periodic cleanup of expired items every 10 minutes
@@ -41,8 +43,17 @@ func NewMemoryCacheDefault() *MemoryCache {
 	return NewMemoryCache(15 * time.Minute)
 }
 
+// Close stops the periodic background cleanup goroutine.
+func (c *MemoryCache) Close() {
+	select {
+	case <-c.stopCh:
+	default:
+		close(c.stopCh)
+	}
+}
+
 // Get retrieves cached models for a specific user and provider.
-func (c *MemoryCache) Get(userID string, provider model.Provider) ([]model.AIModel, bool) {
+func (c *MemoryCache) Get(userID string, provider types.Provider) ([]types.AIModel, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -52,13 +63,13 @@ func (c *MemoryCache) Get(userID string, provider model.Provider) ([]model.AIMod
 		return nil, false
 	}
 
-	result := make([]model.AIModel, len(item.models))
+	result := make([]types.AIModel, len(item.models))
 	copy(result, item.models)
 	return result, true
 }
 
 // Set stores models for a specific user and provider with TTL.
-func (c *MemoryCache) Set(userID string, provider model.Provider, models []model.AIModel) {
+func (c *MemoryCache) Set(userID string, provider types.Provider, models []types.AIModel) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -70,7 +81,7 @@ func (c *MemoryCache) Set(userID string, provider model.Provider, models []model
 }
 
 // Purge removes cached models for a specific user and provider.
-func (c *MemoryCache) Purge(userID string, provider model.Provider) {
+func (c *MemoryCache) Purge(userID string, provider types.Provider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -92,14 +103,20 @@ func (c *MemoryCache) PurgeUser(userID string) {
 
 func (c *MemoryCache) startCleanup(interval time.Duration) {
 	ticker := time.NewTicker(interval)
-	for range ticker.C {
-		c.mu.Lock()
-		now := time.Now()
-		for k, v := range c.items {
-			if now.After(v.expiresAt) {
-				delete(c.items, k)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.stopCh:
+			return
+		case now := <-ticker.C:
+			c.mu.Lock()
+			for k, v := range c.items {
+				if now.After(v.expiresAt) {
+					delete(c.items, k)
+				}
 			}
+			c.mu.Unlock()
 		}
-		c.mu.Unlock()
 	}
 }

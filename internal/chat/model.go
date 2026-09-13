@@ -1,4 +1,4 @@
-package model
+package chat
 
 import "time"
 
@@ -11,6 +11,11 @@ type Chat struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 
 	Messages []Message `gorm:"foreignKey:ChatID;constraint:OnDelete:CASCADE" json:"messages,omitempty"`
+}
+
+// TableName specifies the GORM table name for Chat.
+func (Chat) TableName() string {
+	return "chats"
 }
 
 // Role represents the sender role of a chat message.
@@ -45,3 +50,9 @@ type Message struct {
 	Content   string    `gorm:"type:text;not null" json:"content"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 }
+
+// TableName specifies the GORM table name for Message.
+func (Message) TableName() string {
+	return "messages"
+}
+

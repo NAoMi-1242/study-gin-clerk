@@ -84,7 +84,7 @@
                             "additionalProperties": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/model.Chat"
+                                    "$ref": "#/definitions/chat.Chat"
                                 }
                             }
                         }
@@ -141,7 +141,7 @@
                         "name": "request",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/handler.CreateChatRequest"
+                            "$ref": "#/definitions/chat.CreateChatRequest"
                         }
                     }
                 ],
@@ -149,7 +149,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/model.Chat"
+                            "$ref": "#/definitions/chat.Chat"
                         }
                     },
                     "400": {
@@ -219,7 +219,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.Chat"
+                            "$ref": "#/definitions/chat.Chat"
                         }
                     },
                     "400": {
@@ -293,7 +293,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.SendMessageRequest"
+                            "$ref": "#/definitions/chat.SendMessageRequest"
                         }
                     }
                 ],
@@ -303,7 +303,7 @@
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
-                                "$ref": "#/definitions/model.Message"
+                                "$ref": "#/definitions/chat.Message"
                             }
                         }
                     },
@@ -387,7 +387,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.SendMessageRequest"
+                            "$ref": "#/definitions/chat.SendMessageRequest"
                         }
                     }
                 ],
@@ -465,7 +465,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.UserProfile"
+                            "$ref": "#/definitions/profile.Profile"
                         }
                     },
                     "401": {
@@ -521,7 +521,7 @@
                             "additionalProperties": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/model.UserAPIKey"
+                                    "$ref": "#/definitions/apikey.Key"
                                 }
                             }
                         }
@@ -570,7 +570,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.RegisterAPIKeyRequest"
+                            "$ref": "#/definitions/apikey.RegisterAPIKeyRequest"
                         }
                     }
                 ],
@@ -712,7 +712,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.UpdateSystemPromptRequest"
+                            "$ref": "#/definitions/profile.UpdateSystemPromptRequest"
                         }
                     }
                 ],
@@ -720,7 +720,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.UserProfile"
+                            "$ref": "#/definitions/profile.Profile"
                         }
                     },
                     "400": {
@@ -787,16 +787,36 @@
         }
     },
     "definitions": {
-        "handler.CreateChatRequest": {
+        "apikey.Key": {
             "type": "object",
             "properties": {
-                "title": {
-                    "type": "string",
-                    "maxLength": 255
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "key_hint": {
+                    "description": "Masked representation for display (e.g. \"sk-or-v1-...1234\")",
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Provider"
+                        }
+                    ]
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
                 }
             }
         },
-        "handler.RegisterAPIKeyRequest": {
+        "apikey.RegisterAPIKeyRequest": {
             "type": "object",
             "required": [
                 "api_key",
@@ -811,43 +831,13 @@
                     "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/model.Provider"
+                            "$ref": "#/definitions/types.Provider"
                         }
                     ]
                 }
             }
         },
-        "handler.SendMessageRequest": {
-            "type": "object",
-            "required": [
-                "content",
-                "model",
-                "provider"
-            ],
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "maxLength": 30000
-                },
-                "model": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "provider": {
-                    "$ref": "#/definitions/model.Provider"
-                }
-            }
-        },
-        "handler.UpdateSystemPromptRequest": {
-            "type": "object",
-            "properties": {
-                "system_prompt": {
-                    "type": "string",
-                    "maxLength": 10000
-                }
-            }
-        },
-        "model.Chat": {
+        "chat.Chat": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -859,7 +849,7 @@
                 "messages": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/model.Message"
+                        "$ref": "#/definitions/chat.Message"
                     }
                 },
                 "title": {
@@ -873,7 +863,16 @@
                 }
             }
         },
-        "model.Message": {
+        "chat.CreateChatRequest": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
+        "chat.Message": {
             "type": "object",
             "properties": {
                 "chat_id": {
@@ -892,28 +891,13 @@
                     "description": "\"user\", \"assistant\", \"system\"",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/model.Role"
+                            "$ref": "#/definitions/chat.Role"
                         }
                     ]
                 }
             }
         },
-        "model.Provider": {
-            "type": "string",
-            "enum": [
-                "openrouter",
-                "openai",
-                "anthropic",
-                "google"
-            ],
-            "x-enum-varnames": [
-                "ProviderOpenRouter",
-                "ProviderOpenAI",
-                "ProviderAnthropic",
-                "ProviderGoogle"
-            ]
-        },
-        "model.Role": {
+        "chat.Role": {
             "type": "string",
             "enum": [
                 "user",
@@ -926,36 +910,28 @@
                 "RoleSystem"
             ]
         },
-        "model.UserAPIKey": {
+        "chat.SendMessageRequest": {
             "type": "object",
+            "required": [
+                "content",
+                "model",
+                "provider"
+            ],
             "properties": {
-                "created_at": {
-                    "type": "string"
+                "content": {
+                    "type": "string",
+                    "maxLength": 30000
                 },
-                "id": {
-                    "type": "integer"
-                },
-                "key_hint": {
-                    "description": "Masked representation for display (e.g. \"sk-or-v1-...1234\")",
-                    "type": "string"
+                "model": {
+                    "type": "string",
+                    "maxLength": 100
                 },
                 "provider": {
-                    "description": "ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.Provider"
-                        }
-                    ]
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.Provider"
                 }
             }
         },
-        "model.UserProfile": {
+        "profile.Profile": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -971,6 +947,30 @@
                     "type": "string"
                 }
             }
+        },
+        "profile.UpdateSystemPromptRequest": {
+            "type": "object",
+            "properties": {
+                "system_prompt": {
+                    "type": "string",
+                    "maxLength": 10000
+                }
+            }
+        },
+        "types.Provider": {
+            "type": "string",
+            "enum": [
+                "openrouter",
+                "openai",
+                "anthropic",
+                "google"
+            ],
+            "x-enum-varnames": [
+                "ProviderOpenRouter",
+                "ProviderOpenAI",
+                "ProviderAnthropic",
+                "ProviderGoogle"
+            ]
         }
     },
     "securityDefinitions": {

@@ -10,18 +10,22 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	_ "study-gin-clerk/docs"
+	"study-gin-clerk/internal/aimodel"
+	"study-gin-clerk/internal/apikey"
+	"study-gin-clerk/internal/chat"
 	"study-gin-clerk/internal/config"
-	"study-gin-clerk/internal/handler"
+	"study-gin-clerk/internal/health"
 	"study-gin-clerk/internal/middleware"
+	"study-gin-clerk/internal/profile"
 )
 
 type Dependencies struct {
-	Config             config.Config
-	HealthHandler      *handler.HealthHandler
-	UserProfileHandler *handler.UserProfileHandler
-	UserAPIKeyHandler  *handler.UserAPIKeyHandler
-	AIModelHandler     *handler.AIModelHandler
-	ChatHandler        *handler.ChatHandler
+	Config         config.Config
+	HealthHandler  *health.Handler
+	ProfileHandler *profile.Handler
+	APIKeyHandler  *apikey.Handler
+	AIModelHandler *aimodel.Handler
+	ChatHandler    *chat.Handler
 }
 
 func New(deps Dependencies) *gin.Engine {
@@ -55,14 +59,14 @@ func New(deps Dependencies) *gin.Engine {
 	// 自身のアカウント・設定関連エンドポイント
 	me := api.Group("/me")
 	{
-		me.GET("", deps.UserProfileHandler.GetMe)
-		me.PUT("/system-prompt", deps.UserProfileHandler.UpdateSystemPrompt)
+		me.GET("", deps.ProfileHandler.GetMe)
+		me.PUT("/system-prompt", deps.ProfileHandler.UpdateSystemPrompt)
 
 		apiKeys := me.Group("/api-keys")
 		{
-			apiKeys.POST("", deps.UserAPIKeyHandler.RegisterKey)
-			apiKeys.GET("", deps.UserAPIKeyHandler.ListKeys)
-			apiKeys.DELETE("/:provider", deps.UserAPIKeyHandler.DeleteKey)
+			apiKeys.POST("", deps.APIKeyHandler.RegisterKey)
+			apiKeys.GET("", deps.APIKeyHandler.ListKeys)
+			apiKeys.DELETE("/:provider", deps.APIKeyHandler.DeleteKey)
 		}
 	}
 

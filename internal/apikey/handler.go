@@ -1,4 +1,4 @@
-package handler
+package apikey
 
 import (
 	"errors"
@@ -8,20 +8,19 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"study-gin-clerk/internal/auth"
-	"study-gin-clerk/internal/model"
-	"study-gin-clerk/internal/service"
+	"study-gin-clerk/internal/types"
 )
 
-type UserAPIKeyHandler struct {
-	userAPIKeyService *service.UserAPIKeyService
+type Handler struct {
+	service *Service
 }
 
-func NewUserAPIKeyHandler(userAPIKeyService *service.UserAPIKeyService) *UserAPIKeyHandler {
-	return &UserAPIKeyHandler{userAPIKeyService: userAPIKeyService}
+func NewHandler(service *Service) *Handler {
+	return &Handler{service: service}
 }
 
 type RegisterAPIKeyRequest struct {
-	Provider model.Provider `json:"provider" binding:"required"` // "openrouter", "openai", "anthropic", "google"
+	Provider types.Provider `json:"provider" binding:"required"` // "openrouter", "openai", "anthropic", "google"
 	APIKey   string         `json:"api_key" binding:"required,max=500"`
 }
 
@@ -38,7 +37,7 @@ type RegisterAPIKeyRequest struct {
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/me/api-keys [post]
-func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
+func (h *Handler) RegisterKey(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
 	var req RegisterAPIKeyRequest
@@ -47,16 +46,16 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 		return
 	}
 
-	provider, err := model.ParseProvider(string(req.Provider))
+	provider, err := types.ParseProvider(string(req.Provider))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	req.Provider = provider
 
-	record, err := h.userAPIKeyService.RegisterKey(c.Request.Context(), userID, req.Provider, req.APIKey)
+	record, err := h.service.RegisterKey(c.Request.Context(), userID, req.Provider, req.APIKey)
 	if err != nil {
-		if errors.Is(err, service.ErrValidationFailed) {
+		if errors.Is(err, ErrValidationFailed) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -78,14 +77,14 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 // @Tags user_api_keys
 // @Security BearerAuth
 // @Produce json
-// @Success 200 {object} map[string][]model.UserAPIKey
+// @Success 200 {object} map[string][]Key
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/me/api-keys [get]
-func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
+func (h *Handler) ListKeys(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
-	keys, err := h.userAPIKeyService.ListKeys(c.Request.Context(), userID)
+	keys, err := h.service.ListKeys(c.Request.Context(), userID)
 	if err != nil {
 		slog.Error("failed to list API keys", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list API keys"})
@@ -108,20 +107,20 @@ func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
 // @Failure 404 {object} map[string]string "キーが見つからない"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/me/api-keys/{provider} [delete]
-func (h *UserAPIKeyHandler) DeleteKey(c *gin.Context) {
+func (h *Handler) DeleteKey(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
-	provider, err := model.ParseProvider(c.Param("provider"))
+	provider, err := types.ParseProvider(c.Param("provider"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.userAPIKeyService.DeleteKey(c.Request.Context(), userID, provider); err != nil {
-		if errors.Is(err, service.ErrKeyNotFound) {
+	if err := h.service.DeleteKey(c.Request.Context(), userID, provider); err != nil {
+		if errors.Is(err, ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found for provider: " + string(provider)})
 			return
 		}
-		if errors.Is(err, service.ErrValidationFailed) {
+		if errors.Is(err, ErrValidationFailed) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -132,3 +131,4 @@ func (h *UserAPIKeyHandler) DeleteKey(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "API key deleted successfully"})
 }
+

@@ -1,37 +1,36 @@
-package repository
+package chat
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
-
-	"study-gin-clerk/internal/model"
 )
 
-type ChatRepository struct {
+type Repository struct {
 	db *gorm.DB
 }
 
-func NewChatRepository(db *gorm.DB) *ChatRepository {
-	return &ChatRepository{db: db}
+func NewRepository(db *gorm.DB) *Repository {
+	return &Repository{db: db}
 }
 
 // Create creates a new chat session for a user.
-func (r *ChatRepository) Create(ctx context.Context, userID, title string) (*model.Chat, error) {
-	chat := &model.Chat{
+func (r *Repository) Create(ctx context.Context, userID, title string) (*Chat, error) {
+	c := &Chat{
 		UserID: userID,
 		Title:  title,
 	}
-	if err := r.db.WithContext(ctx).Create(chat).Error; err != nil {
+	if err := r.db.WithContext(ctx).Create(c).Error; err != nil {
 		return nil, err
 	}
-	return chat, nil
+	return c, nil
 }
 
 // ListByUserID retrieves all chats owned by the specified user.
-func (r *ChatRepository) ListByUserID(ctx context.Context, userID string) ([]model.Chat, error) {
-	var chats []model.Chat
+func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]Chat, error) {
+	var chats []Chat
 	err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("updated_at DESC").
@@ -43,23 +42,26 @@ func (r *ChatRepository) ListByUserID(ctx context.Context, userID string) ([]mod
 }
 
 // GetWithMessages retrieves a single chat and its messages, enforcing user ownership.
-func (r *ChatRepository) GetWithMessages(ctx context.Context, chatID uint, userID string) (*model.Chat, error) {
-	var chat model.Chat
+func (r *Repository) GetWithMessages(ctx context.Context, chatID uint, userID string) (*Chat, error) {
+	var c Chat
 	err := r.db.WithContext(ctx).
 		Preload("Messages", func(db *gorm.DB) *gorm.DB {
 			return db.Order("messages.created_at ASC")
 		}).
 		Where("id = ? AND user_id = ?", chatID, userID).
-		First(&chat).Error
+		First(&c).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
-	return &chat, nil
+	return &c, nil
 }
 
 // CreateMessage adds a new message to a chat and updates the chat's updated_at timestamp.
-func (r *ChatRepository) CreateMessage(ctx context.Context, chatID uint, role model.Role, content string) (*model.Message, error) {
-	msg := &model.Message{
+func (r *Repository) CreateMessage(ctx context.Context, chatID uint, role Role, content string) (*Message, error) {
+	msg := &Message{
 		ChatID:  chatID,
 		Role:    role,
 		Content: content,
@@ -69,7 +71,7 @@ func (r *ChatRepository) CreateMessage(ctx context.Context, chatID uint, role mo
 		if err := tx.Create(msg).Error; err != nil {
 			return err
 		}
-		return tx.Model(&model.Chat{}).
+		return tx.Model(&Chat{}).
 			Where("id = ?", chatID).
 			Update("updated_at", time.Now()).Error
 	})
@@ -79,3 +81,4 @@ func (r *ChatRepository) CreateMessage(ctx context.Context, chatID uint, role mo
 
 	return msg, nil
 }
+

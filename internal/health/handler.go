@@ -1,4 +1,4 @@
-package handler
+package health
 
 import (
 	"log/slog"
@@ -8,12 +8,12 @@ import (
 	"gorm.io/gorm"
 )
 
-type HealthHandler struct {
+type Handler struct {
 	db *gorm.DB
 }
 
-func NewHealthHandler(db *gorm.DB) *HealthHandler {
-	return &HealthHandler{db: db}
+func NewHandler(db *gorm.DB) *Handler {
+	return &Handler{db: db}
 }
 
 // Get godoc
@@ -24,7 +24,7 @@ func NewHealthHandler(db *gorm.DB) *HealthHandler {
 // @Success 200 {object} map[string]string
 // @Failure 503 {object} map[string]string "データベース接続異常"
 // @Router /health [get]
-func (h *HealthHandler) Get(c *gin.Context) {
+func (h *Handler) Get(c *gin.Context) {
 	sqlDB, err := h.db.DB()
 	if err != nil {
 		slog.Error("health check failed: failed to get sql.DB", "error", err)
@@ -49,3 +49,4 @@ func (h *HealthHandler) Get(c *gin.Context) {
 		"database": "connected",
 	})
 }
+

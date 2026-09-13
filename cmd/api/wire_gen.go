@@ -8,14 +8,16 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"study-gin-clerk/internal/aimodel"
+	"study-gin-clerk/internal/apikey"
+	"study-gin-clerk/internal/chat"
 	"study-gin-clerk/internal/config"
-	"study-gin-clerk/internal/handler"
+	"study-gin-clerk/internal/health"
 	"study-gin-clerk/internal/infra/ai"
 	"study-gin-clerk/internal/infra/crypto"
 	"study-gin-clerk/internal/infra/db"
-	"study-gin-clerk/internal/infra/repository"
+	"study-gin-clerk/internal/profile"
 	"study-gin-clerk/internal/router"
-	"study-gin-clerk/internal/service"
 )
 
 // Injectors from wire.go:
@@ -25,11 +27,11 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	healthHandler := handler.NewHealthHandler(gormDB)
-	userProfileRepository := repository.NewUserProfileRepository(gormDB)
-	userProfileService := service.NewUserProfileService(userProfileRepository)
-	userProfileHandler := handler.NewUserProfileHandler(userProfileService)
-	userAPIKeyRepository := repository.NewUserAPIKeyRepository(gormDB)
+	handler := health.NewHandler(gormDB)
+	repository := profile.NewRepository(gormDB)
+	service := profile.NewService(repository)
+	profileHandler := profile.NewHandler(service)
+	apikeyRepository := apikey.NewRepository(gormDB)
 	modelRegistry := ai.NewModelRegistry()
 	memoryCache := ai.NewMemoryCacheDefault()
 	aesCipher, err := crypto.NewAESCipher(cfg)
@@ -37,21 +39,21 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	userAPIKeyService := service.NewUserAPIKeyService(userAPIKeyRepository, modelRegistry, memoryCache, aesCipher)
-	userAPIKeyHandler := handler.NewUserAPIKeyHandler(userAPIKeyService)
-	aiModelService := service.NewAIModelService(userAPIKeyService, modelRegistry, memoryCache)
-	aiModelHandler := handler.NewAIModelHandler(aiModelService)
-	chatRepository := repository.NewChatRepository(gormDB)
+	apikeyService := apikey.NewService(apikeyRepository, modelRegistry, memoryCache, aesCipher)
+	apikeyHandler := apikey.NewHandler(apikeyService)
+	aimodelService := aimodel.NewService(apikeyService, modelRegistry, memoryCache)
+	aimodelHandler := aimodel.NewHandler(aimodelService)
+	chatRepository := chat.NewRepository(gormDB)
 	client := ai.NewClient(cfg)
-	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileService)
-	chatHandler := handler.NewChatHandler(chatService)
+	chatService := chat.NewService(chatRepository, apikeyService, client, service)
+	chatHandler := chat.NewHandler(chatService)
 	dependencies := router.Dependencies{
-		Config:             cfg,
-		HealthHandler:      healthHandler,
-		UserProfileHandler: userProfileHandler,
-		UserAPIKeyHandler:  userAPIKeyHandler,
-		AIModelHandler:     aiModelHandler,
-		ChatHandler:        chatHandler,
+		Config:         cfg,
+		HealthHandler:  handler,
+		ProfileHandler: profileHandler,
+		APIKeyHandler:  apikeyHandler,
+		AIModelHandler: aimodelHandler,
+		ChatHandler:    chatHandler,
 	}
 	engine := router.New(dependencies)
 	return engine, func() {

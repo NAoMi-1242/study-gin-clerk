@@ -1,46 +1,37 @@
 basePath: /
 definitions:
-  handler.CreateChatRequest:
+  apikey.Key:
     properties:
-      title:
-        maxLength: 255
+      created_at:
+        type: string
+      id:
+        type: integer
+      key_hint:
+        description: Masked representation for display (e.g. "sk-or-v1-...1234")
+        type: string
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.Provider'
+        description: ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle
+      updated_at:
+        type: string
+      user_id:
         type: string
     type: object
-  handler.RegisterAPIKeyRequest:
+  apikey.RegisterAPIKeyRequest:
     properties:
       api_key:
         maxLength: 500
         type: string
       provider:
         allOf:
-        - $ref: '#/definitions/model.Provider'
+        - $ref: '#/definitions/types.Provider'
         description: '"openrouter", "openai", "anthropic", "google"'
     required:
     - api_key
     - provider
     type: object
-  handler.SendMessageRequest:
-    properties:
-      content:
-        maxLength: 30000
-        type: string
-      model:
-        maxLength: 100
-        type: string
-      provider:
-        $ref: '#/definitions/model.Provider'
-    required:
-    - content
-    - model
-    - provider
-    type: object
-  handler.UpdateSystemPromptRequest:
-    properties:
-      system_prompt:
-        maxLength: 10000
-        type: string
-    type: object
-  model.Chat:
+  chat.Chat:
     properties:
       created_at:
         type: string
@@ -48,7 +39,7 @@ definitions:
         type: integer
       messages:
         items:
-          $ref: '#/definitions/model.Message'
+          $ref: '#/definitions/chat.Message'
         type: array
       title:
         type: string
@@ -57,7 +48,13 @@ definitions:
       user_id:
         type: string
     type: object
-  model.Message:
+  chat.CreateChatRequest:
+    properties:
+      title:
+        maxLength: 255
+        type: string
+    type: object
+  chat.Message:
     properties:
       chat_id:
         type: integer
@@ -69,10 +66,52 @@ definitions:
         type: integer
       role:
         allOf:
-        - $ref: '#/definitions/model.Role'
+        - $ref: '#/definitions/chat.Role'
         description: '"user", "assistant", "system"'
     type: object
-  model.Provider:
+  chat.Role:
+    enum:
+    - user
+    - assistant
+    - system
+    type: string
+    x-enum-varnames:
+    - RoleUser
+    - RoleAssistant
+    - RoleSystem
+  chat.SendMessageRequest:
+    properties:
+      content:
+        maxLength: 30000
+        type: string
+      model:
+        maxLength: 100
+        type: string
+      provider:
+        $ref: '#/definitions/types.Provider'
+    required:
+    - content
+    - model
+    - provider
+    type: object
+  profile.Profile:
+    properties:
+      created_at:
+        type: string
+      system_prompt:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  profile.UpdateSystemPromptRequest:
+    properties:
+      system_prompt:
+        maxLength: 10000
+        type: string
+    type: object
+  types.Provider:
     enum:
     - openrouter
     - openai
@@ -84,45 +123,6 @@ definitions:
     - ProviderOpenAI
     - ProviderAnthropic
     - ProviderGoogle
-  model.Role:
-    enum:
-    - user
-    - assistant
-    - system
-    type: string
-    x-enum-varnames:
-    - RoleUser
-    - RoleAssistant
-    - RoleSystem
-  model.UserAPIKey:
-    properties:
-      created_at:
-        type: string
-      id:
-        type: integer
-      key_hint:
-        description: Masked representation for display (e.g. "sk-or-v1-...1234")
-        type: string
-      provider:
-        allOf:
-        - $ref: '#/definitions/model.Provider'
-        description: ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle
-      updated_at:
-        type: string
-      user_id:
-        type: string
-    type: object
-  model.UserProfile:
-    properties:
-      created_at:
-        type: string
-      system_prompt:
-        type: string
-      updated_at:
-        type: string
-      user_id:
-        type: string
-    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -174,7 +174,7 @@ paths:
           schema:
             additionalProperties:
               items:
-                $ref: '#/definitions/model.Chat'
+                $ref: '#/definitions/chat.Chat'
               type: array
             type: object
         "401":
@@ -209,14 +209,14 @@ paths:
         in: body
         name: request
         schema:
-          $ref: '#/definitions/handler.CreateChatRequest'
+          $ref: '#/definitions/chat.CreateChatRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/model.Chat'
+            $ref: '#/definitions/chat.Chat'
         "400":
           description: 不正なリクエスト
           schema:
@@ -261,7 +261,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.Chat'
+            $ref: '#/definitions/chat.Chat'
         "400":
           description: 不正なID
           schema:
@@ -307,7 +307,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.SendMessageRequest'
+          $ref: '#/definitions/chat.SendMessageRequest'
       produces:
       - application/json
       responses:
@@ -315,7 +315,7 @@ paths:
           description: OK
           schema:
             additionalProperties:
-              $ref: '#/definitions/model.Message'
+              $ref: '#/definitions/chat.Message'
             type: object
         "400":
           description: 不正なリクエスト
@@ -368,7 +368,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.SendMessageRequest'
+          $ref: '#/definitions/chat.SendMessageRequest'
       produces:
       - text/event-stream
       responses:
@@ -420,7 +420,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.UserProfile'
+            $ref: '#/definitions/profile.Profile'
         "401":
           description: 未認証
           schema:
@@ -455,7 +455,7 @@ paths:
           schema:
             additionalProperties:
               items:
-                $ref: '#/definitions/model.UserAPIKey'
+                $ref: '#/definitions/apikey.Key'
               type: array
             type: object
         "401":
@@ -485,7 +485,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.RegisterAPIKeyRequest'
+          $ref: '#/definitions/apikey.RegisterAPIKeyRequest'
       produces:
       - application/json
       responses:
@@ -576,14 +576,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.UpdateSystemPromptRequest'
+          $ref: '#/definitions/profile.UpdateSystemPromptRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.UserProfile'
+            $ref: '#/definitions/profile.Profile'
         "400":
           description: 不正なリクエスト
           schema:

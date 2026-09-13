@@ -1,4 +1,4 @@
-package handler
+package profile
 
 import (
 	"log/slog"
@@ -7,17 +7,14 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"study-gin-clerk/internal/auth"
-	"study-gin-clerk/internal/service"
 )
 
-type UserProfileHandler struct {
-	userProfileService *service.UserProfileService
+type Handler struct {
+	service *Service
 }
 
-func NewUserProfileHandler(userProfileService *service.UserProfileService) *UserProfileHandler {
-	return &UserProfileHandler{
-		userProfileService: userProfileService,
-	}
+func NewHandler(service *Service) *Handler {
+	return &Handler{service: service}
 }
 
 // GetMe godoc
@@ -26,15 +23,15 @@ func NewUserProfileHandler(userProfileService *service.UserProfileService) *User
 // @Tags user_profiles
 // @Security BearerAuth
 // @Produce json
-// @Success 200 {object} model.UserProfile
+// @Success 200 {object} Profile
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 403 {object} map[string]string "認可エラー・トークン不正"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/me [get]
-func (h *UserProfileHandler) GetMe(c *gin.Context) {
+func (h *Handler) GetMe(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
-	profile, err := h.userProfileService.GetProfile(c.Request.Context(), userID)
+	p, err := h.service.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		slog.Error("failed to get profile", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -43,7 +40,7 @@ func (h *UserProfileHandler) GetMe(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, profile)
+	c.JSON(http.StatusOK, p)
 }
 
 type UpdateSystemPromptRequest struct {
@@ -58,12 +55,12 @@ type UpdateSystemPromptRequest struct {
 // @Accept json
 // @Produce json
 // @Param request body UpdateSystemPromptRequest true "システムプロンプト設定 (最大10000文字)"
-// @Success 200 {object} model.UserProfile
+// @Success 200 {object} Profile
 // @Failure 400 {object} map[string]string "不正なリクエスト"
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/me/system-prompt [put]
-func (h *UserProfileHandler) UpdateSystemPrompt(c *gin.Context) {
+func (h *Handler) UpdateSystemPrompt(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
 	var req UpdateSystemPromptRequest
@@ -72,12 +69,13 @@ func (h *UserProfileHandler) UpdateSystemPrompt(c *gin.Context) {
 		return
 	}
 
-	profile, err := h.userProfileService.UpdateSystemPrompt(c.Request.Context(), userID, req.SystemPrompt)
+	p, err := h.service.UpdateSystemPrompt(c.Request.Context(), userID, req.SystemPrompt)
 	if err != nil {
 		slog.Error("failed to update system prompt", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update system prompt"})
 		return
 	}
 
-	c.JSON(http.StatusOK, profile)
+	c.JSON(http.StatusOK, p)
 }
+

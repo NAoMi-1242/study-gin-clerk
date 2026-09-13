@@ -1,4 +1,4 @@
-package service
+package apikey
 
 import (
 	"context"
@@ -6,29 +6,26 @@ import (
 	"fmt"
 	"strings"
 
-	"gorm.io/gorm"
-
 	"study-gin-clerk/internal/infra/ai"
 	"study-gin-clerk/internal/infra/crypto"
-	"study-gin-clerk/internal/infra/repository"
-	"study-gin-clerk/internal/model"
+	"study-gin-clerk/internal/types"
 )
 
-type UserAPIKeyService struct {
-	keyRepo  *repository.UserAPIKeyRepository
+type Service struct {
+	repo     *Repository
 	registry *ai.ModelRegistry
 	cache    *ai.MemoryCache
 	cipher   *crypto.AESCipher
 }
 
-func NewUserAPIKeyService(
-	keyRepo *repository.UserAPIKeyRepository,
+func NewService(
+	repo *Repository,
 	registry *ai.ModelRegistry,
 	cache *ai.MemoryCache,
 	cipher *crypto.AESCipher,
-) *UserAPIKeyService {
-	return &UserAPIKeyService{
-		keyRepo:  keyRepo,
+) *Service {
+	return &Service{
+		repo:     repo,
 		registry: registry,
 		cache:    cache,
 		cipher:   cipher,
@@ -36,37 +33,37 @@ func NewUserAPIKeyService(
 }
 
 // RegisterKey validates the key with the provider, encrypts it, saves it in DB, and purges any stale cache.
-func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID string, provider model.Provider, apiKey string) (*model.UserAPIKey, error) {
-	apiKey = strings.TrimSpace(apiKey)
+func (s *Service) RegisterKey(ctx context.Context, userID string, provider types.Provider, rawKey string) (*Key, error) {
+	rawKey = strings.TrimSpace(rawKey)
 
 	if !provider.IsValid() {
 		return nil, fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, provider)
 	}
-	if apiKey == "" {
+	if rawKey == "" {
 		return nil, fmt.Errorf("%w: api_key is required", ErrValidationFailed)
 	}
 
 	// 1. Probe the provider API to verify key validity
-	if err := s.registry.ValidateKey(ctx, provider, apiKey); err != nil {
+	if err := s.registry.ValidateKey(ctx, provider, rawKey); err != nil {
 		return nil, fmt.Errorf("%w: API key probe failed for '%s': %v", ErrValidationFailed, provider, err)
 	}
 
 	// 2. Encrypt the key using AES-256-GCM
-	encrypted, err := s.cipher.Encrypt(apiKey)
+	encrypted, err := s.cipher.Encrypt(rawKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encrypt API key: %w", err)
 	}
 
-	keyHint := model.MaskAPIKey(apiKey)
+	keyHint := MaskKey(rawKey)
 
-	record := &model.UserAPIKey{
+	record := &Key{
 		UserID:       userID,
 		Provider:     provider,
 		EncryptedKey: encrypted,
 		KeyHint:      keyHint,
 	}
 
-	if err := s.keyRepo.Upsert(ctx, record); err != nil {
+	if err := s.repo.Upsert(ctx, record); err != nil {
 		return nil, fmt.Errorf("failed to save API key: %w", err)
 	}
 
@@ -77,19 +74,16 @@ func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID string, prov
 }
 
 // ListKeys returns all registered API keys for the user (masked hints only).
-func (s *UserAPIKeyService) ListKeys(ctx context.Context, userID string) ([]model.UserAPIKey, error) {
-	return s.keyRepo.ListByUserID(ctx, userID)
+func (s *Service) ListKeys(ctx context.Context, userID string) ([]Key, error) {
+	return s.repo.ListByUserID(ctx, userID)
 }
 
 // DeleteKey removes an API key and purges the associated cache.
-func (s *UserAPIKeyService) DeleteKey(ctx context.Context, userID string, provider model.Provider) error {
+func (s *Service) DeleteKey(ctx context.Context, userID string, provider types.Provider) error {
 	if !provider.IsValid() {
 		return fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, provider)
 	}
-	if err := s.keyRepo.DeleteByProvider(ctx, userID, provider); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrKeyNotFound
-		}
+	if err := s.repo.DeleteByProvider(ctx, userID, provider); err != nil {
 		return err
 	}
 	s.cache.Purge(userID, provider)
@@ -97,13 +91,13 @@ func (s *UserAPIKeyService) DeleteKey(ctx context.Context, userID string, provid
 }
 
 // GetDecryptedKey retrieves and decrypts the user's API key for the specified provider.
-func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID string, provider model.Provider) (string, error) {
-	record, err := s.keyRepo.GetByProvider(ctx, userID, provider)
+func (s *Service) GetDecryptedKey(ctx context.Context, userID string, provider types.Provider) (string, error) {
+	record, err := s.repo.GetByProvider(ctx, userID, provider)
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return "", fmt.Errorf("%w: provider '%s'", ErrNotRegistered, provider)
+		}
 		return "", err
-	}
-	if record == nil {
-		return "", fmt.Errorf("%w: provider '%s'", ErrKeyNotRegistered, provider)
 	}
 
 	decrypted, err := s.cipher.Decrypt(record.EncryptedKey)
@@ -114,26 +108,26 @@ func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID string, 
 	return decrypted, nil
 }
 
-// DecryptedAPIKey represents a user's decrypted API key for a specific provider.
-type DecryptedAPIKey struct {
-	Provider model.Provider
+// DecryptedKey represents a user's decrypted API key for a specific provider.
+type DecryptedKey struct {
+	Provider types.Provider
 	RawKey   string
 }
 
 // GetDecryptedKeys retrieves and decrypts all registered API keys for the user.
-func (s *UserAPIKeyService) GetDecryptedKeys(ctx context.Context, userID string) ([]DecryptedAPIKey, error) {
-	records, err := s.keyRepo.ListByUserID(ctx, userID)
+func (s *Service) GetDecryptedKeys(ctx context.Context, userID string) ([]DecryptedKey, error) {
+	records, err := s.repo.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	var keys []DecryptedAPIKey
+	var keys []DecryptedKey
 	for _, record := range records {
 		rawKey, err := s.cipher.Decrypt(record.EncryptedKey)
 		if err != nil {
 			continue
 		}
-		keys = append(keys, DecryptedAPIKey{
+		keys = append(keys, DecryptedKey{
 			Provider: record.Provider,
 			RawKey:   rawKey,
 		})
@@ -141,3 +135,4 @@ func (s *UserAPIKeyService) GetDecryptedKeys(ctx context.Context, userID string)
 
 	return keys, nil
 }
+

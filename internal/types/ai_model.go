@@ -1,4 +1,4 @@
-package model
+package types
 
 // AIModel represents a normalized AI model available from a provider.
 type AIModel struct {
@@ -8,3 +8,4 @@ type AIModel struct {
 	Description string   `json:"description"` // Brief description or tagline
 	ContextLen  int      `json:"context_len"` // Context window length in tokens
 }
+

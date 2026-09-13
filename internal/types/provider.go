@@ -1,4 +1,4 @@
-package model
+package types
 
 import (
 	"fmt"
@@ -46,3 +46,4 @@ func ParseProvider(s string) (Provider, error) {
 	}
 	return normalized, nil
 }
+
