@@ -102,10 +102,13 @@ sequenceDiagram
 
 ```
 study-gin-clerk/
-  ├── Dockerfile                    # Go 1.25 + Air + Wire CLI
+  ├── Dockerfile                    # Go 1.26.7 + Air + Wire CLI + golang-migrate
   ├── compose.yaml                  # Docker Compose 定義 (Go API + PostgreSQL 16)
   ├── .air.toml                     # ホットリロード設定
   ├── wire-manual.md                # Google Wire 運用マニュアル
+  ├── migrations/                   # golang-migrate SQL マイグレーションファイル
+  │    ├── 000001_create_initial_tables.up.sql / down.sql
+  │    └── 000002_add_system_prompt.up.sql / down.sql
   ├── cmd/
   │    └── api/
   │         ├── main.go             # エントリポイント (InitializeApp の実行と HTTP サーバ起動)
@@ -116,29 +119,33 @@ study-gin-clerk/
   │    ├── auth/
   │    │    └── user.go             # 認証コンテキスト操作 (SetUserID, MustGetUserID)
   │    ├── config/
-  │    │    └── env.go              # 環境変数読み込み・バリデーション (DB DSN対応)
-  │    ├── db/
-  │    │    ├── wire.go             # db.Set (DB 接続の DI 定義)
-  │    │    └── db.go               # GORM 接続・プール設定・AutoMigrate
+  │    │    └── env.go              # 環境変数読み込み・バリデーション (DB DSN, AES鍵)
   │    ├── handler/
   │    │    ├── wire.go             # handler.Set (Handler 層の DI 定義)
-  │    │    ├── chat.go             # チャット関連 API
+  │    │    ├── ai.go               # モデル一覧 API
+  │    │    ├── chat.go             # チャット・ストリーミング API
   │    │    ├── health.go           # ヘルスチェック API
-  │    │    └── user.go             # ユーザー関連 API
+  │    │    ├── user.go             # ユーザー関連 API
+  │    │    └── user_api_key.go     # ユーザー API キー管理 API
   │    ├── middleware/
   │    │    └── clerk.go            # Clerk 認証ミドルウェア (防腐層)
   │    ├── model/
-  │    │    └── chat.go             # GORM モデル (Chat, Message)
-  │    ├── repository/
-  │    │    ├── wire.go             # repository.Set (Repository 層の DI 定義)
-  │    │    └── chat.go             # GORM を用いたチャットデータアクセス
+  │    │    ├── api_key.go          # API キーモデル
+  │    │    ├── chat.go             # チャット・メッセージモデル
+  │    │    └── user_profile.go     # ユーザープロファイル・プロンプトモデル
   │    ├── router/
   │    │    ├── wire.go             # router.Set (Router 層の DI 定義)
   │    │    └── routes.go           # エンドポイントのルーティング定義
-  │    └── service/
-  │         ├── wire.go             # service.Set (Service 層の DI 定義)
-  │         ├── chat.go             # チャット業務ロジック (AI返答生成)
-  │         └── user.go             # ユーザー関連ビジネスロジック
+  │    ├── service/
+  │    │    ├── wire.go             # service.Set (Service 層の DI 定義)
+  │    │    ├── chat.go             # チャット業務ロジック (AI返答・ストリーミング)
+  │    │    ├── user.go             # ユーザー・プロンプト業務ロジック
+  │    │    └── user_api_key.go     # API キー暗号化・モデル取得ロジック
+  │    └── infra/                   # 【インフラ層】外部依存・低レベル技術を集約
+  │         ├── ai/                 # GoAI SDK クライアント, Registry, Cache
+  │         ├── crypto/             # AES-256-GCM 暗号化 / 復号化ユーティリティ
+  │         ├── db/                 # GORM 接続・プール設定
+  │         └── repository/         # PostgreSQL データアクセス (CRUD)
   └── web/
        ├── nginx.conf               # 仮フロントエンド配信用 Nginx 設定 (リバースプロキシ & 動的環境変数配信)
        └── index.html               # 動作検証用フロントエンド (Clerk JS 連携 & Swagger UI 埋め込み)

@@ -58,14 +58,17 @@ study-gin-clerk/
   └── internal/
        ├── service/
        │    ├── wire.go             # Service 全体の ProviderSet (service.Set)
-       │    └── user.go
+       │    └── ...
        ├── handler/
        │    ├── wire.go             # Handler 全体の ProviderSet (handler.Set)
-       │    ├── health.go
-       │    └── user.go
-       └── router/
-            ├── wire.go             # Router の ProviderSet (router.Set)
-            └── routes.go           # ルーティング定義と Dependencies
+       │    └── ...
+       ├── router/
+       │    ├── wire.go             # Router の ProviderSet (router.Set)
+       │    └── routes.go           # ルーティング定義と Dependencies
+       └── infra/                   # 【インフラ層】外部依存・低レベル技術を集約
+            ├── ai/wire.go          # AI クライアント・Cache・Registry の ProviderSet (ai.Set)
+            ├── db/wire.go          # GORM DB 接続の ProviderSet (db.Set)
+            └── repository/wire.go  # Repository の ProviderSet (repository.Set)
 ```
 
 ### 各ファイルの役割
@@ -82,12 +85,21 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 
+	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/handler"
+	"study-gin-clerk/internal/infra/ai"
+	"study-gin-clerk/internal/infra/db"
+	"study-gin-clerk/internal/infra/repository"
 	"study-gin-clerk/internal/router"
+	"study-gin-clerk/internal/service"
 )
 
-func InitializeApp() (*gin.Engine, error) {
+func InitializeApp(cfg config.Config) (*gin.Engine, error) {
 	wire.Build(
+		db.Set,
+		ai.Set,
+		repository.Set,
+		service.Set,
 		handler.Set,
 		router.Set,
 	)

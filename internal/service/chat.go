@@ -6,9 +6,9 @@ import (
 
 	"github.com/zendev-sh/goai"
 
-	"study-gin-clerk/internal/ai"
+	"study-gin-clerk/internal/infra/ai"
 	"study-gin-clerk/internal/model"
-	"study-gin-clerk/internal/repository"
+	"study-gin-clerk/internal/infra/repository"
 )
 
 type ChatService struct {

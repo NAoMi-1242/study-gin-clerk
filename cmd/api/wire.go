@@ -7,11 +7,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 
-	"study-gin-clerk/internal/ai"
 	"study-gin-clerk/internal/config"
-	"study-gin-clerk/internal/db"
 	"study-gin-clerk/internal/handler"
-	"study-gin-clerk/internal/repository"
+	"study-gin-clerk/internal/infra/ai"
+	"study-gin-clerk/internal/infra/db"
+	"study-gin-clerk/internal/infra/repository"
 	"study-gin-clerk/internal/router"
 	"study-gin-clerk/internal/service"
 )
