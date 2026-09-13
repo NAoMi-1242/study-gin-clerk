@@ -37,7 +37,7 @@ type RegisterAPIKeyRequest struct {
 // @Failure 400 {object} map[string]string "検証失敗または不正なリクエスト"
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 500 {object} map[string]string "サーバーエラー"
-// @Router /api/v1/user/api-keys [post]
+// @Router /api/v1/me/api-keys [post]
 func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
@@ -81,7 +81,7 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 // @Success 200 {object} map[string][]model.UserAPIKey
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 500 {object} map[string]string "サーバーエラー"
-// @Router /api/v1/user/api-keys [get]
+// @Router /api/v1/me/api-keys [get]
 func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
@@ -107,7 +107,7 @@ func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 404 {object} map[string]string "キーが見つからない"
 // @Failure 500 {object} map[string]string "サーバーエラー"
-// @Router /api/v1/user/api-keys/{provider} [delete]
+// @Router /api/v1/me/api-keys/{provider} [delete]
 func (h *UserAPIKeyHandler) DeleteKey(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 	provider, err := model.ParseProvider(c.Param("provider"))

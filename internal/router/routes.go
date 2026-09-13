@@ -52,19 +52,22 @@ func New(deps Dependencies) *gin.Engine {
 	api := engine.Group("/api/v1")
 	api.Use(middleware.ClerkAuthMiddleware())
 
-	api.GET("/me", deps.UserHandler.GetMe)
-	api.PUT("/me/system-prompt", deps.UserHandler.UpdateSystemPrompt)
+	// 自身のアカウント・設定関連エンドポイント
+	me := api.Group("/me")
+	{
+		me.GET("", deps.UserHandler.GetMe)
+		me.PUT("/system-prompt", deps.UserHandler.UpdateSystemPrompt)
+
+		apiKeys := me.Group("/api-keys")
+		{
+			apiKeys.POST("", deps.UserAPIKeyHandler.RegisterKey)
+			apiKeys.GET("", deps.UserAPIKeyHandler.ListKeys)
+			apiKeys.DELETE("/:provider", deps.UserAPIKeyHandler.DeleteKey)
+		}
+	}
 
 	// AI 関連エンドポイント
 	api.GET("/ai/models", deps.AIHandler.ListModels)
-
-	// ユーザー API キー管理エンドポイント
-	apiKeys := api.Group("/user/api-keys")
-	{
-		apiKeys.POST("", deps.UserAPIKeyHandler.RegisterKey)
-		apiKeys.GET("", deps.UserAPIKeyHandler.ListKeys)
-		apiKeys.DELETE("/:provider", deps.UserAPIKeyHandler.DeleteKey)
-	}
 
 	chats := api.Group("/chats")
 	{

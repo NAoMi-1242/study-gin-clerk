@@ -504,73 +504,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/me/system-prompt": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "ユーザー共通のデフォルトシステムプロンプトを更新・保存します",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "システムプロンプト更新",
-                "parameters": [
-                    {
-                        "description": "システムプロンプト設定 (最大10000文字)",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.UpdateSystemPromptRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.UserProfile"
-                        }
-                    },
-                    "400": {
-                        "description": "不正なリクエスト",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "未認証",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "サーバーエラー",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/user/api-keys": {
+        "/api/v1/me/api-keys": {
             "get": {
                 "security": [
                     {
@@ -686,7 +620,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/user/api-keys/{provider}": {
+        "/api/v1/me/api-keys/{provider}": {
             "delete": {
                 "security": [
                     {
@@ -740,6 +674,72 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "キーが見つからない",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/system-prompt": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "ユーザー共通のデフォルトシステムプロンプトを更新・保存します",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "システムプロンプト更新",
+                "parameters": [
+                    {
+                        "description": "システムプロンプト設定 (最大10000文字)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.UpdateSystemPromptRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.UserProfile"
+                        }
+                    },
+                    "400": {
+                        "description": "不正なリクエスト",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "未認証",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
