@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"study-gin-clerk/internal/repository"
+	"study-gin-clerk/internal/infra/repository"
 )
 
 type UserProfile struct {

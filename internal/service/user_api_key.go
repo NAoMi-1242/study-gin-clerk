@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"study-gin-clerk/internal/ai"
 	"study-gin-clerk/internal/config"
-	"study-gin-clerk/internal/crypto"
+	"study-gin-clerk/internal/infra/ai"
+	"study-gin-clerk/internal/infra/crypto"
+	"study-gin-clerk/internal/infra/repository"
 	"study-gin-clerk/internal/model"
-	"study-gin-clerk/internal/repository"
 )
 
 type UserAPIKeyService struct {
