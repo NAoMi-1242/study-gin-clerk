@@ -13,13 +13,16 @@ import (
 	"github.com/zendev-sh/goai/provider/openai"
 	"github.com/zendev-sh/goai/provider/openrouter"
 
+	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/model"
 )
 
-type Client struct{}
+type Client struct {
+	cfg config.Config
+}
 
-func NewClient() *Client {
-	return &Client{}
+func NewClient(cfg config.Config) *Client {
+	return &Client{cfg: cfg}
 }
 
 // CreateModel builds the appropriate GoAI provider.LanguageModel.
@@ -36,11 +39,15 @@ func (c *Client) CreateModel(providerName model.Provider, modelID, apiKey string
 
 	switch providerName {
 	case model.ProviderOpenRouter:
+		referer := c.cfg.AppURL
+		if referer == "" {
+			referer = "http://localhost:3000"
+		}
 		return openrouter.Chat(
 			modelID,
 			openrouter.WithAPIKey(apiKey),
 			openrouter.WithHeaders(map[string]string{
-				"HTTP-Referer": "http://localhost:3000",
+				"HTTP-Referer": referer,
 				"X-Title":      "Study Gin Clerk",
 			}),
 		), nil

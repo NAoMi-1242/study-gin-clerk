@@ -9,11 +9,13 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	_ "study-gin-clerk/docs"
+	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/handler"
 	"study-gin-clerk/internal/middleware"
 )
 
 type Dependencies struct {
+	Config            config.Config
 	HealthHandler     *handler.HealthHandler
 	UserHandler       *handler.UserHandler
 	ChatHandler       *handler.ChatHandler
@@ -25,8 +27,16 @@ func New(deps Dependencies) *gin.Engine {
 	engine := gin.Default()
 
 	// CORS 設定 (フロントエンドからの通信を許可)
+	allowedOrigins := []string{deps.Config.AppURL}
+	if deps.Config.AppURL != "http://localhost:8080" {
+		allowedOrigins = append(allowedOrigins, "http://localhost:8080")
+	}
+	if deps.Config.AppURL == "http://localhost:3000" {
+		allowedOrigins = append(allowedOrigins, "http://127.0.0.1:3000")
+	}
+
 	engine.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:8080", "http://127.0.0.1:3000"},
+		AllowOrigins:     allowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},

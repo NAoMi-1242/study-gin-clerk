@@ -16,7 +16,7 @@ import (
 	"study-gin-clerk/internal/service"
 )
 
-func InitializeApp(cfg config.Config) (*gin.Engine, error) {
+func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	wire.Build(
 		db.Set,
 		ai.Set,
@@ -25,6 +25,6 @@ func InitializeApp(cfg config.Config) (*gin.Engine, error) {
 		handler.Set,
 		router.Set,
 	)
-	return nil, nil
+	return nil, nil, nil
 }
 

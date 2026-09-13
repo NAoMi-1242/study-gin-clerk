@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,7 +22,7 @@ func NewChatHandler(chatService *service.ChatService) *ChatHandler {
 }
 
 type CreateChatRequest struct {
-	Title string `json:"title"`
+	Title string `json:"title" binding:"max=255"`
 }
 
 // CreateChat godoc
@@ -31,8 +32,9 @@ type CreateChatRequest struct {
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param request body CreateChatRequest false "チャット設定 (タイトル)"
+// @Param request body CreateChatRequest false "チャット設定 (タイトル, 最大255文字)"
 // @Success 201 {object} model.Chat
+// @Failure 400 {object} map[string]string "不正なリクエスト"
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 403 {object} map[string]string "認可エラー・トークン不正"
 // @Failure 500 {object} map[string]string "サーバーエラー"
@@ -41,11 +43,15 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
 	var req CreateChatRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
+		return
+	}
 
 	chat, err := h.chatService.CreateChat(c.Request.Context(), userID, req.Title)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create chat: " + err.Error()})
+		slog.Error("failed to create chat", "error", err, "user_id", userID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create chat"})
 		return
 	}
 
@@ -68,6 +74,7 @@ func (h *ChatHandler) ListChats(c *gin.Context) {
 
 	chats, err := h.chatService.ListChats(c.Request.Context(), userID)
 	if err != nil {
+		slog.Error("failed to list chats", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list chats"})
 		return
 	}
@@ -107,9 +114,9 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 }
 
 type SendMessageRequest struct {
-	Content  string         `json:"content" binding:"required"`
-	Provider model.Provider `json:"provider" binding:"required"` // "openrouter", "openai", "anthropic", "google"
-	Model    string         `json:"model" binding:"required"`    // e.g. "anthropic/claude-3.5-sonnet"
+	Content  string         `json:"content" binding:"required,max=30000"`
+	Provider model.Provider `json:"provider" binding:"required"`
+	Model    string         `json:"model" binding:"required,max=100"`
 }
 
 // SendMessage godoc
@@ -124,7 +131,8 @@ type SendMessageRequest struct {
 // @Success 200 {object} map[string]model.Message
 // @Failure 400 {object} map[string]string "不正なリクエスト"
 // @Failure 401 {object} map[string]string "未認証"
-// @Failure 403 {object} map[string]string "認可エラー・トークン不正"
+// @Failure 404 {object} map[string]string "チャットが見つからない"
+// @Failure 502 {object} map[string]string "AIプロバイダ通信エラー"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/chats/{id}/messages [post]
 func (h *ChatHandler) SendMessage(c *gin.Context) {
@@ -138,7 +146,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 
 	var req SendMessageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "content, provider, and model are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content (max 30000 chars), provider, and model are required"})
 		return
 	}
 
@@ -151,7 +159,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 
 	userMsg, aiMsg, err := h.chatService.SendMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleChatError(c, err, userID, chatID)
 		return
 	}
 
@@ -173,6 +181,8 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 // @Success 200 {string} string "text/event-stream"
 // @Failure 400 {object} map[string]string "不正なリクエスト"
 // @Failure 401 {object} map[string]string "未認証"
+// @Failure 404 {object} map[string]string "チャットが見つからない"
+// @Failure 502 {object} map[string]string "AIプロバイダ通信エラー"
 // @Failure 500 {object} map[string]string "サーバーエラー"
 // @Router /api/v1/chats/{id}/messages/stream [post]
 func (h *ChatHandler) StreamMessage(c *gin.Context) {
@@ -186,7 +196,7 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 
 	var req SendMessageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "content, provider, and model are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content (max 30000 chars), provider, and model are required"})
 		return
 	}
 
@@ -199,7 +209,7 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 
 	userMsg, textStream, onComplete, err := h.chatService.StreamMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleChatError(c, err, userID, chatID)
 		return
 	}
 
@@ -225,7 +235,8 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 
 	// 3. ストリームエラーの確認
 	if err := textStream.Err(); err != nil {
-		c.SSEvent("error", gin.H{"error": err.Error()})
+		slog.Error("stream error from AI provider", "error", err, "user_id", userID, "chat_id", chatID)
+		c.SSEvent("error", gin.H{"error": "AI generation interrupted: " + err.Error()})
 		c.Writer.Flush()
 		return
 	}
@@ -233,7 +244,8 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 	// 4. DB に完成した全文を保存
 	aiMsg, err := onComplete(fullText.String())
 	if err != nil {
-		c.SSEvent("error", gin.H{"error": "failed to persist assistant message: " + err.Error()})
+		slog.Error("failed to persist assistant message", "error", err, "user_id", userID, "chat_id", chatID)
+		c.SSEvent("error", gin.H{"error": "failed to persist assistant message"})
 		c.Writer.Flush()
 		return
 	}
@@ -241,6 +253,26 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 	// 5. 完了シグナルを通知
 	c.SSEvent("done", aiMsg)
 	c.Writer.Flush()
+}
+
+func handleChatError(c *gin.Context, err error, userID string, chatID uint) {
+	errStr := err.Error()
+	if strings.Contains(errStr, "chat not found") {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
+		return
+	}
+	if strings.Contains(errStr, "is not registered") || strings.Contains(errStr, "required") || strings.Contains(errStr, "unsupported provider") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errStr})
+		return
+	}
+	if strings.Contains(errStr, "AI generation failed") || strings.Contains(errStr, "failed to initiate AI stream") {
+		slog.Error("AI provider error", "error", err, "user_id", userID, "chat_id", chatID)
+		c.JSON(http.StatusBadGateway, gin.H{"error": errStr})
+		return
+	}
+
+	slog.Error("internal chat error", "error", err, "user_id", userID, "chat_id", chatID)
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process chat request"})
 }
 
 func parseUintParam(c *gin.Context, paramName string) (uint, error) {
