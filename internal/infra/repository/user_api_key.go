@@ -18,16 +18,16 @@ func NewUserAPIKeyRepository(db *gorm.DB) *UserAPIKeyRepository {
 	return &UserAPIKeyRepository{db: db}
 }
 
-// UpsertUserAPIKey creates or updates an API key for a user and provider.
-func (r *UserAPIKeyRepository) UpsertUserAPIKey(ctx context.Context, apiKey *model.UserAPIKey) error {
+// Upsert creates or updates an API key for a user and provider.
+func (r *UserAPIKeyRepository) Upsert(ctx context.Context, apiKey *model.UserAPIKey) error {
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "user_id"}, {Name: "provider"}},
 		DoUpdates: clause.AssignmentColumns([]string{"encrypted_key", "key_hint", "updated_at"}),
 	}).Create(apiKey).Error
 }
 
-// GetUserAPIKey retrieves a user's API key for a given provider.
-func (r *UserAPIKeyRepository) GetUserAPIKey(ctx context.Context, userID string, provider model.Provider) (*model.UserAPIKey, error) {
+// GetByProvider retrieves a user's API key for a given provider.
+func (r *UserAPIKeyRepository) GetByProvider(ctx context.Context, userID string, provider model.Provider) (*model.UserAPIKey, error) {
 	var key model.UserAPIKey
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ? AND provider = ?", userID, provider).
@@ -40,8 +40,8 @@ func (r *UserAPIKeyRepository) GetUserAPIKey(ctx context.Context, userID string,
 	return &key, nil
 }
 
-// ListUserAPIKeys retrieves all registered API keys for a user (without decrypted secret).
-func (r *UserAPIKeyRepository) ListUserAPIKeys(ctx context.Context, userID string) ([]model.UserAPIKey, error) {
+// ListByUserID retrieves all registered API keys for a user (without decrypted secret).
+func (r *UserAPIKeyRepository) ListByUserID(ctx context.Context, userID string) ([]model.UserAPIKey, error) {
 	var keys []model.UserAPIKey
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
@@ -52,8 +52,8 @@ func (r *UserAPIKeyRepository) ListUserAPIKeys(ctx context.Context, userID strin
 	return keys, nil
 }
 
-// DeleteUserAPIKey deletes an API key for a user and provider.
-func (r *UserAPIKeyRepository) DeleteUserAPIKey(ctx context.Context, userID string, provider model.Provider) error {
+// DeleteByProvider deletes an API key for a user and provider.
+func (r *UserAPIKeyRepository) DeleteByProvider(ctx context.Context, userID string, provider model.Provider) error {
 	res := r.db.WithContext(ctx).
 		Where("user_id = ? AND provider = ?", userID, provider).
 		Delete(&model.UserAPIKey{})

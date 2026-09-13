@@ -463,7 +463,7 @@ paths:
       - BearerAuth: []
       summary: 登録済み API キー一覧
       tags:
-      - api_keys
+      - user_api_keys
     post:
       consumes:
       - application/json
@@ -506,7 +506,7 @@ paths:
       - BearerAuth: []
       summary: API キー登録・更新
       tags:
-      - api_keys
+      - user_api_keys
   /api/v1/me/api-keys/{provider}:
     delete:
       description: 指定されたプロバイダの API キーを削除し、モデルキャッシュをパージします。
@@ -553,7 +553,7 @@ paths:
       - BearerAuth: []
       summary: 登録済み API キー削除
       tags:
-      - api_keys
+      - user_api_keys
   /api/v1/me/system-prompt:
     put:
       consumes:

@@ -16,12 +16,12 @@ import (
 )
 
 type Dependencies struct {
-	Config            config.Config
+	Config             config.Config
 	HealthHandler      *handler.HealthHandler
 	UserProfileHandler *handler.UserProfileHandler
+	UserAPIKeyHandler  *handler.UserAPIKeyHandler
+	AIModelHandler     *handler.AIModelHandler
 	ChatHandler        *handler.ChatHandler
-	UserAPIKeyHandler *handler.UserAPIKeyHandler
-	AIModelHandler    *handler.AIModelHandler
 }
 
 func New(deps Dependencies) *gin.Engine {

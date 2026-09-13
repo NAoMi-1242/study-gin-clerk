@@ -55,7 +55,7 @@ func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID string, prov
 		return nil, fmt.Errorf("failed to encrypt API key: %w", err)
 	}
 
-	keyHint := crypto.MaskAPIKey(apiKey)
+	keyHint := model.MaskAPIKey(apiKey)
 
 	record := &model.UserAPIKey{
 		UserID:       userID,
@@ -64,7 +64,7 @@ func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID string, prov
 		KeyHint:      keyHint,
 	}
 
-	if err := s.keyRepo.UpsertUserAPIKey(ctx, record); err != nil {
+	if err := s.keyRepo.Upsert(ctx, record); err != nil {
 		return nil, fmt.Errorf("failed to save API key: %w", err)
 	}
 
@@ -76,7 +76,7 @@ func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID string, prov
 
 // ListKeys returns all registered API keys for the user (masked hints only).
 func (s *UserAPIKeyService) ListKeys(ctx context.Context, userID string) ([]model.UserAPIKey, error) {
-	return s.keyRepo.ListUserAPIKeys(ctx, userID)
+	return s.keyRepo.ListByUserID(ctx, userID)
 }
 
 // DeleteKey removes an API key and purges the associated cache.
@@ -84,7 +84,7 @@ func (s *UserAPIKeyService) DeleteKey(ctx context.Context, userID string, provid
 	if !provider.IsValid() {
 		return fmt.Errorf("unsupported provider: '%s'", provider)
 	}
-	if err := s.keyRepo.DeleteUserAPIKey(ctx, userID, provider); err != nil {
+	if err := s.keyRepo.DeleteByProvider(ctx, userID, provider); err != nil {
 		return err
 	}
 	s.cache.Purge(userID, string(provider))
@@ -93,7 +93,7 @@ func (s *UserAPIKeyService) DeleteKey(ctx context.Context, userID string, provid
 
 // GetDecryptedKey retrieves and decrypts the user's API key for the specified provider.
 func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID string, provider model.Provider) (string, error) {
-	record, err := s.keyRepo.GetUserAPIKey(ctx, userID, provider)
+	record, err := s.keyRepo.GetByProvider(ctx, userID, provider)
 	if err != nil {
 		return "", err
 	}
@@ -117,7 +117,7 @@ type DecryptedAPIKey struct {
 
 // GetDecryptedKeys retrieves and decrypts all registered API keys for the user.
 func (s *UserAPIKeyService) GetDecryptedKeys(ctx context.Context, userID string) ([]DecryptedAPIKey, error) {
-	records, err := s.keyRepo.ListUserAPIKeys(ctx, userID)
+	records, err := s.keyRepo.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}

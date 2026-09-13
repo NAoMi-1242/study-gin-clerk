@@ -28,24 +28,24 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	userProfileRepository := repository.NewUserProfileRepository(gormDB)
 	userProfileService := service.NewUserProfileService(userProfileRepository)
 	userProfileHandler := handler.NewUserProfileHandler(userProfileService)
-	chatRepository := repository.NewChatRepository(gormDB)
 	userAPIKeyRepository := repository.NewUserAPIKeyRepository(gormDB)
 	modelRegistry := ai.NewModelRegistry()
 	memoryCache := ai.NewMemoryCacheDefault()
 	userAPIKeyService := service.NewUserAPIKeyService(userAPIKeyRepository, modelRegistry, memoryCache, cfg)
-	client := ai.NewClient(cfg)
-	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileService)
-	chatHandler := handler.NewChatHandler(chatService)
 	userAPIKeyHandler := handler.NewUserAPIKeyHandler(userAPIKeyService)
 	aiModelService := service.NewAIModelService(userAPIKeyService, modelRegistry, memoryCache)
 	aiModelHandler := handler.NewAIModelHandler(aiModelService)
+	chatRepository := repository.NewChatRepository(gormDB)
+	client := ai.NewClient(cfg)
+	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileService)
+	chatHandler := handler.NewChatHandler(chatService)
 	dependencies := router.Dependencies{
 		Config:             cfg,
 		HealthHandler:      healthHandler,
 		UserProfileHandler: userProfileHandler,
-		ChatHandler:        chatHandler,
 		UserAPIKeyHandler:  userAPIKeyHandler,
 		AIModelHandler:     aiModelHandler,
+		ChatHandler:        chatHandler,
 	}
 	engine := router.New(dependencies)
 	return engine, func() {
