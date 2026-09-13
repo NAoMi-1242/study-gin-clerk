@@ -110,13 +110,13 @@ func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID string, 
 }
 
 // GetAvailableModels retrieves dynamically discovered models for all active providers of the user, using cache.
-func (s *UserAPIKeyService) GetAvailableModels(ctx context.Context, userID string, refresh bool) ([]ai.ModelInfo, []model.Provider, error) {
+func (s *UserAPIKeyService) GetAvailableModels(ctx context.Context, userID string, refresh bool) ([]model.AIModelInfo, []model.Provider, error) {
 	keys, err := s.keyRepo.ListUserAPIKeys(ctx, userID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var allModels []ai.ModelInfo
+	var allModels []model.AIModelInfo
 	var activeProviders []model.Provider
 
 	for _, k := range keys {

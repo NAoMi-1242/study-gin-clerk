@@ -4,10 +4,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"study-gin-clerk/internal/model"
 )
 
 type cacheItem struct {
-	models    []ModelInfo
+	models    []model.AIModelInfo
 	expiresAt time.Time
 }
 
@@ -40,7 +42,7 @@ func NewMemoryCacheDefault() *MemoryCache {
 }
 
 // Get retrieves cached models for a specific user and provider.
-func (c *MemoryCache) Get(userID, provider string) ([]ModelInfo, bool) {
+func (c *MemoryCache) Get(userID, provider string) ([]model.AIModelInfo, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -50,13 +52,13 @@ func (c *MemoryCache) Get(userID, provider string) ([]ModelInfo, bool) {
 		return nil, false
 	}
 
-	result := make([]ModelInfo, len(item.models))
+	result := make([]model.AIModelInfo, len(item.models))
 	copy(result, item.models)
 	return result, true
 }
 
 // Set stores models for a specific user and provider with TTL.
-func (c *MemoryCache) Set(userID, provider string, models []ModelInfo) {
+func (c *MemoryCache) Set(userID, provider string, models []model.AIModelInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
