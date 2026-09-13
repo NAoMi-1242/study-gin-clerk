@@ -7,28 +7,35 @@ import (
 	"github.com/zendev-sh/goai"
 
 	"study-gin-clerk/internal/infra/ai"
-	"study-gin-clerk/internal/model"
 	"study-gin-clerk/internal/infra/repository"
+	"study-gin-clerk/internal/model"
 )
 
+// StreamMessageResult holds the stream instance and message persistence hook.
+type StreamMessageResult struct {
+	UserMessage *model.Message
+	TextStream  *goai.TextStream
+	OnComplete  func(fullText string) (*model.Message, error)
+}
+
 type ChatService struct {
-	chatRepo        *repository.ChatRepository
-	apiKeyService   *UserAPIKeyService
-	aiClient        *ai.Client
-	userProfileRepo *repository.UserProfileRepository
+	chatRepo           *repository.ChatRepository
+	userAPIKeyService  *UserAPIKeyService
+	aiClient           *ai.Client
+	userProfileService *UserProfileService
 }
 
 func NewChatService(
 	chatRepo *repository.ChatRepository,
-	apiKeyService *UserAPIKeyService,
+	userAPIKeyService *UserAPIKeyService,
 	aiClient *ai.Client,
-	userProfileRepo *repository.UserProfileRepository,
+	userProfileService *UserProfileService,
 ) *ChatService {
 	return &ChatService{
-		chatRepo:        chatRepo,
-		apiKeyService:   apiKeyService,
-		aiClient:        aiClient,
-		userProfileRepo: userProfileRepo,
+		chatRepo:           chatRepo,
+		userAPIKeyService:  userAPIKeyService,
+		aiClient:           aiClient,
+		userProfileService: userProfileService,
 	}
 }
 
@@ -72,7 +79,7 @@ func (s *ChatService) SendMessage(
 	}
 
 	// 2. ユーザーの API キーを復号して取得
-	apiKey, err := s.apiKeyService.GetDecryptedKey(ctx, userID, providerName)
+	apiKey, err := s.userAPIKeyService.GetDecryptedKey(ctx, userID, providerName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -84,7 +91,7 @@ func (s *ChatService) SendMessage(
 	}
 
 	// 4. ユーザーの最新システムプロンプトを取得 (常に最新の共通設定を動的適用)
-	userProfile, _ := s.userProfileRepo.GetProfile(ctx, userID)
+	userProfile, _ := s.userProfileService.GetProfile(ctx, userID)
 	systemPrompt := ""
 	if userProfile != nil {
 		systemPrompt = userProfile.SystemPrompt
@@ -106,41 +113,40 @@ func (s *ChatService) SendMessage(
 }
 
 // StreamMessage prepares a streaming response using GoAI StreamText.
-// Returns the saved user message, the active TextStream, and a completion callback to persist the assistant reply.
 func (s *ChatService) StreamMessage(
 	ctx context.Context,
 	chatID uint,
 	userID, content string,
 	providerName model.Provider,
 	modelID string,
-) (*model.Message, *goai.TextStream, func(fullText string) (*model.Message, error), error) {
+) (*StreamMessageResult, error) {
 	if !providerName.IsValid() {
-		return nil, nil, nil, fmt.Errorf("unsupported provider: '%s'", providerName)
+		return nil, fmt.Errorf("unsupported provider: '%s'", providerName)
 	}
 	if modelID == "" {
-		return nil, nil, nil, fmt.Errorf("model is required")
+		return nil, fmt.Errorf("model is required")
 	}
 
 	// 1. チャットの所有権と過去履歴を取得
 	chat, err := s.chatRepo.GetChatWithMessages(ctx, chatID, userID)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("chat not found or unauthorized: %w", err)
+		return nil, fmt.Errorf("chat not found or unauthorized: %w", err)
 	}
 
 	// 2. ユーザーの API キーを復号して取得
-	apiKey, err := s.apiKeyService.GetDecryptedKey(ctx, userID, providerName)
+	apiKey, err := s.userAPIKeyService.GetDecryptedKey(ctx, userID, providerName)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	// 3. ユーザーのメッセージを DB 保存
 	userMsg, err := s.chatRepo.CreateMessage(ctx, chatID, "user", content)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to save user message: %w", err)
+		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
 	// 4. ユーザーの最新システムプロンプトを取得 (常に最新の共通設定を動的適用)
-	userProfile, _ := s.userProfileRepo.GetProfile(ctx, userID)
+	userProfile, _ := s.userProfileService.GetProfile(ctx, userID)
 	systemPrompt := ""
 	if userProfile != nil {
 		systemPrompt = userProfile.SystemPrompt
@@ -149,13 +155,17 @@ func (s *ChatService) StreamMessage(
 	// 5. GoAI StreamText を呼び出し
 	stream, err := s.aiClient.StreamReply(ctx, providerName, modelID, apiKey, systemPrompt, chat.Messages, content)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to initiate AI stream: %w", err)
+		return nil, fmt.Errorf("failed to initiate AI stream: %w", err)
 	}
 
-	// 5. ストリーム完了時に呼び出す DB 保存コールバック
+	// 6. ストリーム完了時に呼び出す DB 保存コールバック
 	onComplete := func(fullText string) (*model.Message, error) {
 		return s.chatRepo.CreateMessage(context.Background(), chatID, "assistant", fullText)
 	}
 
-	return userMsg, stream, onComplete, nil
+	return &StreamMessageResult{
+		UserMessage: userMsg,
+		TextStream:  stream,
+		OnComplete:  onComplete,
+	}, nil
 }
