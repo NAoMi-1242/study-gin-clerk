@@ -27,7 +27,7 @@ func (r *UserAPIKeyRepository) UpsertUserAPIKey(ctx context.Context, apiKey *mod
 }
 
 // GetUserAPIKey retrieves a user's API key for a given provider.
-func (r *UserAPIKeyRepository) GetUserAPIKey(ctx context.Context, userID, provider string) (*model.UserAPIKey, error) {
+func (r *UserAPIKeyRepository) GetUserAPIKey(ctx context.Context, userID string, provider model.Provider) (*model.UserAPIKey, error) {
 	var key model.UserAPIKey
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ? AND provider = ?", userID, provider).
@@ -53,7 +53,7 @@ func (r *UserAPIKeyRepository) ListUserAPIKeys(ctx context.Context, userID strin
 }
 
 // DeleteUserAPIKey deletes an API key for a user and provider.
-func (r *UserAPIKeyRepository) DeleteUserAPIKey(ctx context.Context, userID, provider string) error {
+func (r *UserAPIKeyRepository) DeleteUserAPIKey(ctx context.Context, userID string, provider model.Provider) error {
 	res := r.db.WithContext(ctx).
 		Where("user_id = ? AND provider = ?", userID, provider).
 		Delete(&model.UserAPIKey{})

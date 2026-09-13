@@ -10,8 +10,9 @@ definitions:
       api_key:
         type: string
       provider:
+        allOf:
+        - $ref: '#/definitions/model.Provider'
         description: '"openrouter", "openai", "anthropic", "google"'
-        type: string
     required:
     - api_key
     - provider
@@ -24,8 +25,9 @@ definitions:
         description: e.g. "anthropic/claude-3.5-sonnet"
         type: string
       provider:
+        allOf:
+        - $ref: '#/definitions/model.Provider'
         description: '"openrouter", "openai", "anthropic", "google"'
-        type: string
     required:
     - content
     - model
@@ -67,6 +69,18 @@ definitions:
         description: '"user", "assistant", "system"'
         type: string
     type: object
+  model.Provider:
+    enum:
+    - openrouter
+    - openai
+    - anthropic
+    - google
+    type: string
+    x-enum-varnames:
+    - ProviderOpenRouter
+    - ProviderOpenAI
+    - ProviderAnthropic
+    - ProviderGoogle
   model.UserAPIKey:
     properties:
       created_at:
@@ -77,8 +91,9 @@ definitions:
         description: Masked representation for display (e.g. "sk-or-v1-...1234")
         type: string
       provider:
-        description: '"openrouter", "openai", "anthropic", "google"'
-        type: string
+        allOf:
+        - $ref: '#/definitions/model.Provider'
+        description: ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle
       updated_at:
         type: string
       user_id:

@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"study-gin-clerk/internal/auth"
+	"study-gin-clerk/internal/model"
 	"study-gin-clerk/internal/service"
 )
 
@@ -106,9 +107,9 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 }
 
 type SendMessageRequest struct {
-	Content  string `json:"content" binding:"required"`
-	Provider string `json:"provider" binding:"required"` // "openrouter", "openai", "anthropic", "google"
-	Model    string `json:"model" binding:"required"`    // e.g. "anthropic/claude-3.5-sonnet"
+	Content  string         `json:"content" binding:"required"`
+	Provider model.Provider `json:"provider" binding:"required"` // "openrouter", "openai", "anthropic", "google"
+	Model    string         `json:"model" binding:"required"`    // e.g. "anthropic/claude-3.5-sonnet"
 }
 
 // SendMessage godoc
@@ -140,6 +141,13 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "content, provider, and model are required"})
 		return
 	}
+
+	provider, err := model.ParseProvider(string(req.Provider))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.Provider = provider
 
 	userMsg, aiMsg, err := h.chatService.SendMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
 	if err != nil {
@@ -181,6 +189,13 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "content, provider, and model are required"})
 		return
 	}
+
+	provider, err := model.ParseProvider(string(req.Provider))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.Provider = provider
 
 	userMsg, textStream, onComplete, err := h.chatService.StreamMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
 	if err != nil {

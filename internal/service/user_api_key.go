@@ -34,20 +34,19 @@ func NewUserAPIKeyService(
 }
 
 // RegisterKey validates the key with the provider, encrypts it, saves it in DB, and purges any stale cache.
-func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID, providerName, apiKey string) (*model.UserAPIKey, error) {
-	providerName = strings.ToLower(strings.TrimSpace(providerName))
+func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID string, provider model.Provider, apiKey string) (*model.UserAPIKey, error) {
 	apiKey = strings.TrimSpace(apiKey)
 
-	if providerName == "" {
-		return nil, fmt.Errorf("provider is required")
+	if !provider.IsValid() {
+		return nil, fmt.Errorf("unsupported provider: '%s'", provider)
 	}
 	if apiKey == "" {
 		return nil, fmt.Errorf("api_key is required")
 	}
 
 	// 1. Probe the provider API to verify key validity
-	if err := s.registry.ValidateKey(ctx, providerName, apiKey); err != nil {
-		return nil, fmt.Errorf("API key validation failed for '%s': %w", providerName, err)
+	if err := s.registry.ValidateKey(ctx, provider, apiKey); err != nil {
+		return nil, fmt.Errorf("API key validation failed for '%s': %w", provider, err)
 	}
 
 	// 2. Encrypt the key using AES-256-GCM
@@ -60,7 +59,7 @@ func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID, providerNam
 
 	record := &model.UserAPIKey{
 		UserID:       userID,
-		Provider:     providerName,
+		Provider:     provider,
 		EncryptedKey: encrypted,
 		KeyHint:      keyHint,
 	}
@@ -70,7 +69,7 @@ func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID, providerNam
 	}
 
 	// 3. Immediately invalidate/purge any cached models for this user & provider
-	s.cache.Purge(userID, providerName)
+	s.cache.Purge(userID, string(provider))
 
 	return record, nil
 }
@@ -81,24 +80,25 @@ func (s *UserAPIKeyService) ListKeys(ctx context.Context, userID string) ([]mode
 }
 
 // DeleteKey removes an API key and purges the associated cache.
-func (s *UserAPIKeyService) DeleteKey(ctx context.Context, userID, providerName string) error {
-	providerName = strings.ToLower(strings.TrimSpace(providerName))
-	if err := s.keyRepo.DeleteUserAPIKey(ctx, userID, providerName); err != nil {
+func (s *UserAPIKeyService) DeleteKey(ctx context.Context, userID string, provider model.Provider) error {
+	if !provider.IsValid() {
+		return fmt.Errorf("unsupported provider: '%s'", provider)
+	}
+	if err := s.keyRepo.DeleteUserAPIKey(ctx, userID, provider); err != nil {
 		return err
 	}
-	s.cache.Purge(userID, providerName)
+	s.cache.Purge(userID, string(provider))
 	return nil
 }
 
 // GetDecryptedKey retrieves and decrypts the user's API key for the specified provider.
-func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID, providerName string) (string, error) {
-	providerName = strings.ToLower(strings.TrimSpace(providerName))
-	record, err := s.keyRepo.GetUserAPIKey(ctx, userID, providerName)
+func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID string, provider model.Provider) (string, error) {
+	record, err := s.keyRepo.GetUserAPIKey(ctx, userID, provider)
 	if err != nil {
 		return "", err
 	}
 	if record == nil {
-		return "", fmt.Errorf("API key for provider '%s' is not registered. Please register it in API Key Settings", providerName)
+		return "", fmt.Errorf("API key for provider '%s' is not registered. Please register it in API Key Settings", provider)
 	}
 
 	decrypted, err := crypto.Decrypt(record.EncryptedKey, s.cfg.EncryptionKey)
@@ -110,20 +110,20 @@ func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID, provide
 }
 
 // GetAvailableModels retrieves dynamically discovered models for all active providers of the user, using cache.
-func (s *UserAPIKeyService) GetAvailableModels(ctx context.Context, userID string, refresh bool) ([]ai.ModelInfo, []string, error) {
+func (s *UserAPIKeyService) GetAvailableModels(ctx context.Context, userID string, refresh bool) ([]ai.ModelInfo, []model.Provider, error) {
 	keys, err := s.keyRepo.ListUserAPIKeys(ctx, userID)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var allModels []ai.ModelInfo
-	var activeProviders []string
+	var activeProviders []model.Provider
 
 	for _, k := range keys {
 		activeProviders = append(activeProviders, k.Provider)
 
 		if !refresh {
-			if cached, found := s.cache.Get(userID, k.Provider); found {
+			if cached, found := s.cache.Get(userID, string(k.Provider)); found {
 				allModels = append(allModels, cached...)
 				continue
 			}
@@ -140,7 +140,7 @@ func (s *UserAPIKeyService) GetAvailableModels(ctx context.Context, userID strin
 			continue
 		}
 
-		s.cache.Set(userID, k.Provider, models)
+		s.cache.Set(userID, string(k.Provider), models)
 		allModels = append(allModels, models...)
 	}
 

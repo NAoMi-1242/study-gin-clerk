@@ -750,7 +750,11 @@ const docTemplate = `{
                 },
                 "provider": {
                     "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
-                    "type": "string"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.Provider"
+                        }
+                    ]
                 }
             }
         },
@@ -771,7 +775,11 @@ const docTemplate = `{
                 },
                 "provider": {
                     "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
-                    "type": "string"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.Provider"
+                        }
+                    ]
                 }
             }
         },
@@ -830,6 +838,21 @@ const docTemplate = `{
                 }
             }
         },
+        "model.Provider": {
+            "type": "string",
+            "enum": [
+                "openrouter",
+                "openai",
+                "anthropic",
+                "google"
+            ],
+            "x-enum-varnames": [
+                "ProviderOpenRouter",
+                "ProviderOpenAI",
+                "ProviderAnthropic",
+                "ProviderGoogle"
+            ]
+        },
         "model.UserAPIKey": {
             "type": "object",
             "properties": {
@@ -844,8 +867,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "provider": {
-                    "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
-                    "type": "string"
+                    "description": "ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.Provider"
+                        }
+                    ]
                 },
                 "updated_at": {
                     "type": "string"

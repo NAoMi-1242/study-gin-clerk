@@ -23,8 +23,7 @@ func NewClient() *Client {
 }
 
 // CreateModel builds the appropriate GoAI provider.LanguageModel.
-func (c *Client) CreateModel(providerName, modelID, apiKey string) (provider.LanguageModel, error) {
-	providerName = strings.ToLower(strings.TrimSpace(providerName))
+func (c *Client) CreateModel(providerName model.Provider, modelID, apiKey string) (provider.LanguageModel, error) {
 	modelID = strings.TrimSpace(modelID)
 	apiKey = strings.TrimSpace(apiKey)
 
@@ -36,7 +35,7 @@ func (c *Client) CreateModel(providerName, modelID, apiKey string) (provider.Lan
 	}
 
 	switch providerName {
-	case "openrouter":
+	case model.ProviderOpenRouter:
 		return openrouter.Chat(
 			modelID,
 			openrouter.WithAPIKey(apiKey),
@@ -45,11 +44,11 @@ func (c *Client) CreateModel(providerName, modelID, apiKey string) (provider.Lan
 				"X-Title":      "Study Gin Clerk",
 			}),
 		), nil
-	case "openai":
+	case model.ProviderOpenAI:
 		return openai.Chat(modelID, openai.WithAPIKey(apiKey)), nil
-	case "anthropic":
+	case model.ProviderAnthropic:
 		return anthropic.Chat(modelID, anthropic.WithAPIKey(apiKey)), nil
-	case "google", "gemini":
+	case model.ProviderGoogle:
 		return google.Chat(modelID, google.WithAPIKey(apiKey)), nil
 	default:
 		return nil, fmt.Errorf("unsupported AI provider: '%s'", providerName)
@@ -78,7 +77,7 @@ func (c *Client) buildMessages(systemPrompt string, history []model.Message, pro
 	return msgs
 }
 
-func formatAIError(providerName, modelID string, err error) error {
+func formatAIError(providerName model.Provider, modelID string, err error) error {
 	var apiErr *goai.APIError
 	if errors.As(err, &apiErr) {
 		var details []string
@@ -99,7 +98,8 @@ func formatAIError(providerName, modelID string, err error) error {
 // GenerateReply generates a complete AI response synchronously.
 func (c *Client) GenerateReply(
 	ctx context.Context,
-	providerName, modelID, apiKey, systemPrompt string,
+	providerName model.Provider,
+	modelID, apiKey, systemPrompt string,
 	history []model.Message,
 	prompt string,
 ) (string, error) {
@@ -120,7 +120,8 @@ func (c *Client) GenerateReply(
 // StreamReply starts a streaming text generation using GoAI StreamText.
 func (c *Client) StreamReply(
 	ctx context.Context,
-	providerName, modelID, apiKey, systemPrompt string,
+	providerName model.Provider,
+	modelID, apiKey, systemPrompt string,
 	history []model.Message,
 	prompt string,
 ) (*goai.TextStream, error) {
