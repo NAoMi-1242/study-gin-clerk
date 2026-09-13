@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"study-gin-clerk/internal/config"
+	"gorm.io/gorm"
+
 	"study-gin-clerk/internal/infra/ai"
 	"study-gin-clerk/internal/infra/crypto"
 	"study-gin-clerk/internal/infra/repository"
@@ -16,20 +18,20 @@ type UserAPIKeyService struct {
 	keyRepo  *repository.UserAPIKeyRepository
 	registry *ai.ModelRegistry
 	cache    *ai.MemoryCache
-	cfg      config.Config
+	cipher   *crypto.AESCipher
 }
 
 func NewUserAPIKeyService(
 	keyRepo *repository.UserAPIKeyRepository,
 	registry *ai.ModelRegistry,
 	cache *ai.MemoryCache,
-	cfg config.Config,
+	cipher *crypto.AESCipher,
 ) *UserAPIKeyService {
 	return &UserAPIKeyService{
 		keyRepo:  keyRepo,
 		registry: registry,
 		cache:    cache,
-		cfg:      cfg,
+		cipher:   cipher,
 	}
 }
 
@@ -38,19 +40,19 @@ func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID string, prov
 	apiKey = strings.TrimSpace(apiKey)
 
 	if !provider.IsValid() {
-		return nil, fmt.Errorf("unsupported provider: '%s'", provider)
+		return nil, fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, provider)
 	}
 	if apiKey == "" {
-		return nil, fmt.Errorf("api_key is required")
+		return nil, fmt.Errorf("%w: api_key is required", ErrValidationFailed)
 	}
 
 	// 1. Probe the provider API to verify key validity
 	if err := s.registry.ValidateKey(ctx, provider, apiKey); err != nil {
-		return nil, fmt.Errorf("API key validation failed for '%s': %w", provider, err)
+		return nil, fmt.Errorf("%w: API key probe failed for '%s': %v", ErrValidationFailed, provider, err)
 	}
 
 	// 2. Encrypt the key using AES-256-GCM
-	encrypted, err := crypto.Encrypt(apiKey, s.cfg.EncryptionKey)
+	encrypted, err := s.cipher.Encrypt(apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encrypt API key: %w", err)
 	}
@@ -82,9 +84,12 @@ func (s *UserAPIKeyService) ListKeys(ctx context.Context, userID string) ([]mode
 // DeleteKey removes an API key and purges the associated cache.
 func (s *UserAPIKeyService) DeleteKey(ctx context.Context, userID string, provider model.Provider) error {
 	if !provider.IsValid() {
-		return fmt.Errorf("unsupported provider: '%s'", provider)
+		return fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, provider)
 	}
 	if err := s.keyRepo.DeleteByProvider(ctx, userID, provider); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrKeyNotFound
+		}
 		return err
 	}
 	s.cache.Purge(userID, provider)
@@ -98,10 +103,10 @@ func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID string, 
 		return "", err
 	}
 	if record == nil {
-		return "", fmt.Errorf("API key for provider '%s' is not registered. Please register it in API Key Settings", provider)
+		return "", fmt.Errorf("%w: provider '%s'", ErrKeyNotRegistered, provider)
 	}
 
-	decrypted, err := crypto.Decrypt(record.EncryptedKey, s.cfg.EncryptionKey)
+	decrypted, err := s.cipher.Decrypt(record.EncryptedKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to decrypt API key: %w", err)
 	}
@@ -124,7 +129,7 @@ func (s *UserAPIKeyService) GetDecryptedKeys(ctx context.Context, userID string)
 
 	var keys []DecryptedAPIKey
 	for _, record := range records {
-		rawKey, err := crypto.Decrypt(record.EncryptedKey, s.cfg.EncryptionKey)
+		rawKey, err := s.cipher.Decrypt(record.EncryptedKey)
 		if err != nil {
 			continue
 		}
@@ -136,4 +141,3 @@ func (s *UserAPIKeyService) GetDecryptedKeys(ctx context.Context, userID string)
 
 	return keys, nil
 }
-

@@ -8,5 +8,3 @@ var Set = wire.NewSet(
 	NewUserAPIKeyRepository,
 	NewUserProfileRepository,
 )
-
-

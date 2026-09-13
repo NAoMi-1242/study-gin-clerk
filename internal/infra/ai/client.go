@@ -145,4 +145,3 @@ func (c *Client) StreamReply(
 
 	return stream, nil
 }
-

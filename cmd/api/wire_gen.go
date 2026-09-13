@@ -11,6 +11,7 @@ import (
 	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/handler"
 	"study-gin-clerk/internal/infra/ai"
+	"study-gin-clerk/internal/infra/crypto"
 	"study-gin-clerk/internal/infra/db"
 	"study-gin-clerk/internal/infra/repository"
 	"study-gin-clerk/internal/router"
@@ -31,7 +32,12 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	userAPIKeyRepository := repository.NewUserAPIKeyRepository(gormDB)
 	modelRegistry := ai.NewModelRegistry()
 	memoryCache := ai.NewMemoryCacheDefault()
-	userAPIKeyService := service.NewUserAPIKeyService(userAPIKeyRepository, modelRegistry, memoryCache, cfg)
+	aesCipher, err := crypto.NewAESCipher(cfg)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	userAPIKeyService := service.NewUserAPIKeyService(userAPIKeyRepository, modelRegistry, memoryCache, aesCipher)
 	userAPIKeyHandler := handler.NewUserAPIKeyHandler(userAPIKeyService)
 	aiModelService := service.NewAIModelService(userAPIKeyService, modelRegistry, memoryCache)
 	aiModelHandler := handler.NewAIModelHandler(aiModelService)

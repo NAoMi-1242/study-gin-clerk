@@ -5,7 +5,7 @@ import "github.com/gin-gonic/gin"
 const userIDKey = "user_id"
 
 func SetUserID(c *gin.Context, userID string) {
-    c.Set(userIDKey, userID)
+	c.Set(userIDKey, userID)
 }
 
 // GetUserID retrieves the authenticated Clerk user ID from the Gin context if present.

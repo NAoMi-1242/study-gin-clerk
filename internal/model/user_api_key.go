@@ -33,5 +33,3 @@ func MaskAPIKey(key string) string {
 	}
 	return key[:2] + "..." + key[len(key)-2:]
 }
-
-

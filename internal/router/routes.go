@@ -75,7 +75,7 @@ func New(deps Dependencies) *gin.Engine {
 		chats.GET("", deps.ChatHandler.ListChats)
 
 		chats.GET("/:id", deps.ChatHandler.GetChat)
-		
+
 		chats.POST("/:id/messages", deps.ChatHandler.SendMessage)
 		chats.POST("/:id/messages/stream", deps.ChatHandler.StreamMessage)
 	}

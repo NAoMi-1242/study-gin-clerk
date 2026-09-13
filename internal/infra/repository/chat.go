@@ -79,4 +79,3 @@ func (r *ChatRepository) CreateMessage(ctx context.Context, chatID uint, role mo
 
 	return msg, nil
 }
-

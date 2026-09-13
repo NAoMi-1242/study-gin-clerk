@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -56,7 +56,7 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 
 	record, err := h.userAPIKeyService.RegisterKey(c.Request.Context(), userID, req.Provider, req.APIKey)
 	if err != nil {
-		if strings.Contains(err.Error(), "validation failed") || strings.Contains(err.Error(), "unsupported provider") || strings.Contains(err.Error(), "required") {
+		if errors.Is(err, service.ErrValidationFailed) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -117,8 +117,16 @@ func (h *UserAPIKeyHandler) DeleteKey(c *gin.Context) {
 	}
 
 	if err := h.userAPIKeyService.DeleteKey(c.Request.Context(), userID, provider); err != nil {
-		slog.Warn("API key deletion failed or not found", "error", err, "user_id", userID, "provider", provider)
-		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found for provider: " + string(provider)})
+		if errors.Is(err, service.ErrKeyNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found for provider: " + string(provider)})
+			return
+		}
+		if errors.Is(err, service.ErrValidationFailed) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		slog.Error("failed to delete API key", "error", err, "user_id", userID, "provider", provider)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete API key"})
 		return
 	}
 
