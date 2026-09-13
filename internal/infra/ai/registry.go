@@ -38,7 +38,7 @@ func (r *ModelRegistry) ValidateKey(ctx context.Context, providerName model.Prov
 }
 
 // FetchModels dynamically fetches available models from the provider's API.
-func (r *ModelRegistry) FetchModels(ctx context.Context, providerName model.Provider, apiKey string) ([]ModelInfo, error) {
+func (r *ModelRegistry) FetchModels(ctx context.Context, providerName model.Provider, apiKey string) ([]model.AIModelInfo, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return nil, errors.New("API key is required")
@@ -58,7 +58,7 @@ func (r *ModelRegistry) FetchModels(ctx context.Context, providerName model.Prov
 	}
 }
 
-func (r *ModelRegistry) fetchOpenRouterModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
+func (r *ModelRegistry) fetchOpenRouterModels(ctx context.Context, apiKey string) ([]model.AIModelInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://openrouter.ai/api/v1/models", nil)
 	if err != nil {
 		return nil, err
@@ -89,13 +89,13 @@ func (r *ModelRegistry) fetchOpenRouterModels(ctx context.Context, apiKey string
 		return nil, fmt.Errorf("failed to parse openrouter response: %w", err)
 	}
 
-	models := make([]ModelInfo, 0, len(res.Data))
+	models := make([]model.AIModelInfo, 0, len(res.Data))
 	for _, m := range res.Data {
 		name := m.Name
 		if name == "" {
 			name = m.ID
 		}
-		models = append(models, ModelInfo{
+		models = append(models, model.AIModelInfo{
 			ID:          m.ID,
 			Name:        name,
 			Provider:    model.ProviderOpenRouter,
@@ -106,7 +106,7 @@ func (r *ModelRegistry) fetchOpenRouterModels(ctx context.Context, apiKey string
 	return models, nil
 }
 
-func (r *ModelRegistry) fetchOpenAIModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
+func (r *ModelRegistry) fetchOpenAIModels(ctx context.Context, apiKey string) ([]model.AIModelInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.openai.com/v1/models", nil)
 	if err != nil {
 		return nil, err
@@ -134,14 +134,14 @@ func (r *ModelRegistry) fetchOpenAIModels(ctx context.Context, apiKey string) ([
 		return nil, fmt.Errorf("failed to parse openai response: %w", err)
 	}
 
-	var models []ModelInfo
+	var models []model.AIModelInfo
 	for _, m := range res.Data {
 		// Filter for chat completion models only (gpt-*, o1*, o3*, chatgpt-*)
 		if strings.HasPrefix(m.ID, "gpt-") ||
 			strings.HasPrefix(m.ID, "o1") ||
 			strings.HasPrefix(m.ID, "o3") ||
 			strings.HasPrefix(m.ID, "chatgpt-") {
-			models = append(models, ModelInfo{
+			models = append(models, model.AIModelInfo{
 				ID:       m.ID,
 				Name:     m.ID,
 				Provider: model.ProviderOpenAI,
@@ -151,7 +151,7 @@ func (r *ModelRegistry) fetchOpenAIModels(ctx context.Context, apiKey string) ([
 	return models, nil
 }
 
-func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
+func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string) ([]model.AIModelInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.anthropic.com/v1/models", nil)
 	if err != nil {
 		return nil, err
@@ -181,13 +181,13 @@ func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string)
 		return nil, fmt.Errorf("failed to parse anthropic response: %w", err)
 	}
 
-	models := make([]ModelInfo, 0, len(res.Data))
+	models := make([]model.AIModelInfo, 0, len(res.Data))
 	for _, m := range res.Data {
 		name := m.DisplayName
 		if name == "" {
 			name = m.ID
 		}
-		models = append(models, ModelInfo{
+		models = append(models, model.AIModelInfo{
 			ID:       m.ID,
 			Name:     name,
 			Provider: model.ProviderAnthropic,
@@ -196,7 +196,7 @@ func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string)
 	return models, nil
 }
 
-func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
+func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([]model.AIModelInfo, error) {
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", apiKey)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -228,7 +228,7 @@ func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([
 		return nil, fmt.Errorf("failed to parse google response: %w", err)
 	}
 
-	var models []ModelInfo
+	var models []model.AIModelInfo
 	for _, m := range res.Models {
 		// Filter for generateContent support
 		supportsGenerate := false
@@ -248,7 +248,7 @@ func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([
 			displayName = cleanID
 		}
 
-		models = append(models, ModelInfo{
+		models = append(models, model.AIModelInfo{
 			ID:          cleanID,
 			Name:        displayName,
 			Provider:    model.ProviderGoogle,
