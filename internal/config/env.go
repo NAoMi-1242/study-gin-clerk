@@ -56,7 +56,3 @@ func Load() (Config, error) {
 
 	return cfg, nil
 }
-
-func (c Config) DSN() string {
-	return c.DatabaseURL
-}

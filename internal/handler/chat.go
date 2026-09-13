@@ -207,7 +207,7 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 	}
 	req.Provider = provider
 
-	userMsg, textStream, onComplete, err := h.chatService.StreamMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
+	streamResult, err := h.chatService.StreamMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
 	if err != nil {
 		handleChatError(c, err, userID, chatID)
 		return
@@ -222,27 +222,27 @@ func (h *ChatHandler) StreamMessage(c *gin.Context) {
 	c.Writer.Flush()
 
 	// 1. ユーザーメッセージを通知
-	c.SSEvent("user_message", userMsg)
+	c.SSEvent("user_message", streamResult.UserMessage)
 	c.Writer.Flush()
 
 	// 2. チャンクをリアルタイムに送信
 	var fullText strings.Builder
-	for chunk := range textStream.TextStream() {
+	for chunk := range streamResult.TextStream.TextStream() {
 		fullText.WriteString(chunk)
 		c.SSEvent("chunk", gin.H{"chunk": chunk})
 		c.Writer.Flush()
 	}
 
 	// 3. ストリームエラーの確認
-	if err := textStream.Err(); err != nil {
+	if err := streamResult.TextStream.Err(); err != nil {
 		slog.Error("stream error from AI provider", "error", err, "user_id", userID, "chat_id", chatID)
-		c.SSEvent("error", gin.H{"error": "AI generation interrupted: " + err.Error()})
+		c.SSEvent("error", gin.H{"error": "AI generation interrupted"})
 		c.Writer.Flush()
 		return
 	}
 
 	// 4. DB に完成した全文を保存
-	aiMsg, err := onComplete(fullText.String())
+	aiMsg, err := streamResult.OnComplete(fullText.String())
 	if err != nil {
 		slog.Error("failed to persist assistant message", "error", err, "user_id", userID, "chat_id", chatID)
 		c.SSEvent("error", gin.H{"error": "failed to persist assistant message"})
@@ -267,7 +267,7 @@ func handleChatError(c *gin.Context, err error, userID string, chatID uint) {
 	}
 	if strings.Contains(errStr, "AI generation failed") || strings.Contains(errStr, "failed to initiate AI stream") {
 		slog.Error("AI provider error", "error", err, "user_id", userID, "chat_id", chatID)
-		c.JSON(http.StatusBadGateway, gin.H{"error": errStr})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "AI provider communication failed. Please verify your API key and model settings"})
 		return
 	}
 

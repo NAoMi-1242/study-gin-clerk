@@ -13,11 +13,11 @@ import (
 )
 
 type UserAPIKeyHandler struct {
-	keyService *service.UserAPIKeyService
+	userAPIKeyService *service.UserAPIKeyService
 }
 
-func NewUserAPIKeyHandler(keyService *service.UserAPIKeyService) *UserAPIKeyHandler {
-	return &UserAPIKeyHandler{keyService: keyService}
+func NewUserAPIKeyHandler(userAPIKeyService *service.UserAPIKeyService) *UserAPIKeyHandler {
+	return &UserAPIKeyHandler{userAPIKeyService: userAPIKeyService}
 }
 
 type RegisterAPIKeyRequest struct {
@@ -54,7 +54,7 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 	}
 	req.Provider = provider
 
-	record, err := h.keyService.RegisterKey(c.Request.Context(), userID, req.Provider, req.APIKey)
+	record, err := h.userAPIKeyService.RegisterKey(c.Request.Context(), userID, req.Provider, req.APIKey)
 	if err != nil {
 		if strings.Contains(err.Error(), "validation failed") || strings.Contains(err.Error(), "unsupported provider") || strings.Contains(err.Error(), "required") {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -85,7 +85,7 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
-	keys, err := h.keyService.ListKeys(c.Request.Context(), userID)
+	keys, err := h.userAPIKeyService.ListKeys(c.Request.Context(), userID)
 	if err != nil {
 		slog.Error("failed to list API keys", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list API keys"})
@@ -116,7 +116,7 @@ func (h *UserAPIKeyHandler) DeleteKey(c *gin.Context) {
 		return
 	}
 
-	if err := h.keyService.DeleteKey(c.Request.Context(), userID, provider); err != nil {
+	if err := h.userAPIKeyService.DeleteKey(c.Request.Context(), userID, provider); err != nil {
 		slog.Warn("API key deletion failed or not found", "error", err, "user_id", userID, "provider", provider)
 		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found for provider: " + string(provider)})
 		return

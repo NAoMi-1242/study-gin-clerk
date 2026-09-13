@@ -34,10 +34,10 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	memoryCache := ai.NewMemoryCacheDefault()
 	userAPIKeyService := service.NewUserAPIKeyService(userAPIKeyRepository, modelRegistry, memoryCache, cfg)
 	client := ai.NewClient(cfg)
-	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileRepository)
+	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileService)
 	chatHandler := handler.NewChatHandler(chatService)
 	userAPIKeyHandler := handler.NewUserAPIKeyHandler(userAPIKeyService)
-	aiModelService := service.NewAIModelService(userAPIKeyRepository, modelRegistry, memoryCache, cfg)
+	aiModelService := service.NewAIModelService(userAPIKeyService, modelRegistry, memoryCache)
 	aiModelHandler := handler.NewAIModelHandler(aiModelService)
 	dependencies := router.Dependencies{
 		Config:             cfg,

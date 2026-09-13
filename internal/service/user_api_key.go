@@ -109,3 +109,31 @@ func (s *UserAPIKeyService) GetDecryptedKey(ctx context.Context, userID string, 
 	return decrypted, nil
 }
 
+// DecryptedAPIKey represents a user's decrypted API key for a specific provider.
+type DecryptedAPIKey struct {
+	Provider model.Provider
+	RawKey   string
+}
+
+// GetDecryptedKeys retrieves and decrypts all registered API keys for the user.
+func (s *UserAPIKeyService) GetDecryptedKeys(ctx context.Context, userID string) ([]DecryptedAPIKey, error) {
+	records, err := s.keyRepo.ListUserAPIKeys(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var keys []DecryptedAPIKey
+	for _, record := range records {
+		rawKey, err := crypto.Decrypt(record.EncryptedKey, s.cfg.EncryptionKey)
+		if err != nil {
+			continue
+		}
+		keys = append(keys, DecryptedAPIKey{
+			Provider: record.Provider,
+			RawKey:   rawKey,
+		})
+	}
+
+	return keys, nil
+}
+

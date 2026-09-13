@@ -3,37 +3,31 @@ package service
 import (
 	"context"
 
-	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/infra/ai"
-	"study-gin-clerk/internal/infra/crypto"
-	"study-gin-clerk/internal/infra/repository"
 	"study-gin-clerk/internal/model"
 )
 
 type AIModelService struct {
-	keyRepo  *repository.UserAPIKeyRepository
-	registry *ai.ModelRegistry
-	cache    *ai.MemoryCache
-	cfg      config.Config
+	userAPIKeyService *UserAPIKeyService
+	registry          *ai.ModelRegistry
+	cache             *ai.MemoryCache
 }
 
 func NewAIModelService(
-	keyRepo *repository.UserAPIKeyRepository,
+	userAPIKeyService *UserAPIKeyService,
 	registry *ai.ModelRegistry,
 	cache *ai.MemoryCache,
-	cfg config.Config,
 ) *AIModelService {
 	return &AIModelService{
-		keyRepo:  keyRepo,
-		registry: registry,
-		cache:    cache,
-		cfg:      cfg,
+		userAPIKeyService: userAPIKeyService,
+		registry:          registry,
+		cache:             cache,
 	}
 }
 
 // GetAvailableModels retrieves dynamically discovered models for all active providers of the user, using cache.
 func (s *AIModelService) GetAvailableModels(ctx context.Context, userID string, refresh bool) ([]model.AIModelInfo, []model.Provider, error) {
-	keys, err := s.keyRepo.ListUserAPIKeys(ctx, userID)
+	keys, err := s.userAPIKeyService.GetDecryptedKeys(ctx, userID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -51,13 +45,7 @@ func (s *AIModelService) GetAvailableModels(ctx context.Context, userID string, 
 			}
 		}
 
-		// Cache miss or refresh requested: Decrypt and fetch from provider API
-		rawKey, err := crypto.Decrypt(k.EncryptedKey, s.cfg.EncryptionKey)
-		if err != nil {
-			continue
-		}
-
-		models, err := s.registry.FetchModels(ctx, k.Provider, rawKey)
+		models, err := s.registry.FetchModels(ctx, k.Provider, k.RawKey)
 		if err != nil {
 			continue
 		}
@@ -68,4 +56,3 @@ func (s *AIModelService) GetAvailableModels(ctx context.Context, userID string, 
 
 	return allModels, activeProviders, nil
 }
-
