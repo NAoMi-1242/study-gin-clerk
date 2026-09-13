@@ -17,11 +17,19 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		Port:           getEnv("PORT", "8080"),
-		AppURL:         getEnv("APP_URL", "http://localhost:3000"),
+		Port:           os.Getenv("PORT"),
+		AppURL:         os.Getenv("APP_URL"),
 		ClerkSecretKey: os.Getenv("CLERK_SECRET_KEY"),
-		DatabaseURL:    getEnv("DATABASE_URL", "postgres://postgres:password@db:5432/study_app?sslmode=disable"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
 		EncryptionKey:  os.Getenv("ENCRYPTION_KEY"),
+	}
+
+	if cfg.Port == "" {
+		return Config{}, fmt.Errorf("PORT is required")
+	}
+
+	if cfg.AppURL == "" {
+		return Config{}, fmt.Errorf("APP_URL is required")
 	}
 
 	if cfg.ClerkSecretKey == "" {
@@ -51,12 +59,4 @@ func Load() (Config, error) {
 
 func (c Config) DSN() string {
 	return c.DatabaseURL
-}
-
-func getEnv(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
 }
