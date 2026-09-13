@@ -5,9 +5,9 @@ import "github.com/google/wire"
 // Set provides all services for dependency injection.
 var Set = wire.NewSet(
 	NewUserProfileService,
-	NewChatService,
 	NewUserAPIKeyService,
 	NewAIModelService,
+	NewChatService,
 )
 
 

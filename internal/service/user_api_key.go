@@ -69,7 +69,7 @@ func (s *UserAPIKeyService) RegisterKey(ctx context.Context, userID string, prov
 	}
 
 	// 3. Immediately invalidate/purge any cached models for this user & provider
-	s.cache.Purge(userID, string(provider))
+	s.cache.Purge(userID, provider)
 
 	return record, nil
 }
@@ -87,7 +87,7 @@ func (s *UserAPIKeyService) DeleteKey(ctx context.Context, userID string, provid
 	if err := s.keyRepo.DeleteByProvider(ctx, userID, provider); err != nil {
 		return err
 	}
-	s.cache.Purge(userID, string(provider))
+	s.cache.Purge(userID, provider)
 	return nil
 }
 

@@ -68,8 +68,9 @@ definitions:
       id:
         type: integer
       role:
+        allOf:
+        - $ref: '#/definitions/model.Role'
         description: '"user", "assistant", "system"'
-        type: string
     type: object
   model.Provider:
     enum:
@@ -83,6 +84,16 @@ definitions:
     - ProviderOpenAI
     - ProviderAnthropic
     - ProviderGoogle
+  model.Role:
+    enum:
+    - user
+    - assistant
+    - system
+    type: string
+    x-enum-varnames:
+    - RoleUser
+    - RoleAssistant
+    - RoleSystem
   model.UserAPIKey:
     properties:
       created_at:

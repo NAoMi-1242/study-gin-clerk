@@ -70,11 +70,11 @@ func (c *Client) buildMessages(systemPrompt string, history []model.Message, pro
 	}
 	for _, m := range history {
 		switch m.Role {
-		case "user":
+		case model.RoleUser:
 			msgs = append(msgs, goai.UserMessage(m.Content))
-		case "assistant":
+		case model.RoleAssistant:
 			msgs = append(msgs, goai.AssistantMessage(m.Content))
-		case "system":
+		case model.RoleSystem:
 			msgs = append(msgs, goai.SystemMessage(m.Content))
 		}
 	}
