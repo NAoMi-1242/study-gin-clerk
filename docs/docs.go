@@ -27,7 +27,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "ai"
+                    "ai_models"
                 ],
                 "summary": "利用可能モデル一覧取得 (動的取得 \u0026 キャッシュ)",
                 "parameters": [
@@ -464,7 +464,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "users"
+                    "user_profiles"
                 ],
                 "summary": "自分のプロファイル取得",
                 "responses": {
@@ -708,7 +708,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "users"
+                    "user_profiles"
                 ],
                 "summary": "システムプロンプト更新",
                 "parameters": [

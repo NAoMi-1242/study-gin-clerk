@@ -26,8 +26,8 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 	healthHandler := handler.NewHealthHandler(gormDB)
 	userProfileRepository := repository.NewUserProfileRepository(gormDB)
-	userService := service.NewUserService(userProfileRepository)
-	userHandler := handler.NewUserHandler(userService)
+	userProfileService := service.NewUserProfileService(userProfileRepository)
+	userProfileHandler := handler.NewUserProfileHandler(userProfileService)
 	chatRepository := repository.NewChatRepository(gormDB)
 	userAPIKeyRepository := repository.NewUserAPIKeyRepository(gormDB)
 	modelRegistry := ai.NewModelRegistry()
@@ -37,14 +37,15 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileRepository)
 	chatHandler := handler.NewChatHandler(chatService)
 	userAPIKeyHandler := handler.NewUserAPIKeyHandler(userAPIKeyService)
-	aiHandler := handler.NewAIHandler(userAPIKeyService)
+	aiModelService := service.NewAIModelService(userAPIKeyRepository, modelRegistry, memoryCache, cfg)
+	aiModelHandler := handler.NewAIModelHandler(aiModelService)
 	dependencies := router.Dependencies{
-		Config:            cfg,
-		HealthHandler:     healthHandler,
-		UserHandler:       userHandler,
-		ChatHandler:       chatHandler,
-		UserAPIKeyHandler: userAPIKeyHandler,
-		AIHandler:         aiHandler,
+		Config:             cfg,
+		HealthHandler:      healthHandler,
+		UserProfileHandler: userProfileHandler,
+		ChatHandler:        chatHandler,
+		UserAPIKeyHandler:  userAPIKeyHandler,
+		AIModelHandler:     aiModelHandler,
 	}
 	engine := router.New(dependencies)
 	return engine, func() {
