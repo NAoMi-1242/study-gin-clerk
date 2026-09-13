@@ -433,49 +433,7 @@ paths:
       summary: 自分のプロファイル取得
       tags:
       - users
-  /api/v1/me/system-prompt:
-    put:
-      consumes:
-      - application/json
-      description: ユーザー共通のデフォルトシステムプロンプトを更新・保存します
-      parameters:
-      - description: システムプロンプト設定 (最大10000文字)
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.UpdateSystemPromptRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.UserProfile'
-        "400":
-          description: 不正なリクエスト
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: 未認証
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: サーバーエラー
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - BearerAuth: []
-      summary: システムプロンプト更新
-      tags:
-      - users
-  /api/v1/user/api-keys:
+  /api/v1/me/api-keys:
     get:
       description: ユーザーが登録した各社 API キーの一覧（マスクされた key_hint のみ）を取得します。
       produces:
@@ -549,7 +507,7 @@ paths:
       summary: API キー登録・更新
       tags:
       - api_keys
-  /api/v1/user/api-keys/{provider}:
+  /api/v1/me/api-keys/{provider}:
     delete:
       description: 指定されたプロバイダの API キーを削除し、モデルキャッシュをパージします。
       parameters:
@@ -596,6 +554,48 @@ paths:
       summary: 登録済み API キー削除
       tags:
       - api_keys
+  /api/v1/me/system-prompt:
+    put:
+      consumes:
+      - application/json
+      description: ユーザー共通のデフォルトシステムプロンプトを更新・保存します
+      parameters:
+      - description: システムプロンプト設定 (最大10000文字)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateSystemPromptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.UserProfile'
+        "400":
+          description: 不正なリクエスト
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 未認証
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: サーバーエラー
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: システムプロンプト更新
+      tags:
+      - users
   /health:
     get:
       description: サーバーおよびデータベースの稼働状態を確認します

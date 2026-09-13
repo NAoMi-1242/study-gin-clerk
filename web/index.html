@@ -694,7 +694,7 @@
       async function loadRegisteredKeys() {
         const badgesEl = document.getElementById("keys-badges");
         try {
-          const res = await authFetch("/api/v1/user/api-keys");
+          const res = await authFetch("/api/v1/me/api-keys");
           if (!res.ok) throw new Error("Failed to load keys");
           const data = await res.json();
           const keys = data.keys || [];
@@ -727,7 +727,7 @@
           btn.disabled = true;
           btn.textContent = "検証中...";
           try {
-            const res = await authFetch("/api/v1/user/api-keys", {
+            const res = await authFetch("/api/v1/me/api-keys", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ provider, api_key: apiKey }),
