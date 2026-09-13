@@ -54,10 +54,12 @@ func (s *ChatService) GetChat(ctx context.Context, chatID uint, userID string) (
 func (s *ChatService) SendMessage(
 	ctx context.Context,
 	chatID uint,
-	userID, content, providerName, modelID string,
+	userID, content string,
+	providerName model.Provider,
+	modelID string,
 ) (*model.Message, *model.Message, error) {
-	if providerName == "" {
-		return nil, nil, fmt.Errorf("provider is required")
+	if !providerName.IsValid() {
+		return nil, nil, fmt.Errorf("unsupported provider: '%s'", providerName)
 	}
 	if modelID == "" {
 		return nil, nil, fmt.Errorf("model is required")
@@ -108,10 +110,12 @@ func (s *ChatService) SendMessage(
 func (s *ChatService) StreamMessage(
 	ctx context.Context,
 	chatID uint,
-	userID, content, providerName, modelID string,
+	userID, content string,
+	providerName model.Provider,
+	modelID string,
 ) (*model.Message, *goai.TextStream, func(fullText string) (*model.Message, error), error) {
-	if providerName == "" {
-		return nil, nil, nil, fmt.Errorf("provider is required")
+	if !providerName.IsValid() {
+		return nil, nil, nil, fmt.Errorf("unsupported provider: '%s'", providerName)
 	}
 	if modelID == "" {
 		return nil, nil, nil, fmt.Errorf("model is required")

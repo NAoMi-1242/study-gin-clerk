@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"study-gin-clerk/internal/auth"
+	"study-gin-clerk/internal/model"
 	"study-gin-clerk/internal/service"
 )
 
@@ -18,8 +19,8 @@ func NewUserAPIKeyHandler(keyService *service.UserAPIKeyService) *UserAPIKeyHand
 }
 
 type RegisterAPIKeyRequest struct {
-	Provider string `json:"provider" binding:"required"` // "openrouter", "openai", "anthropic", "google"
-	APIKey   string `json:"api_key" binding:"required"`
+	Provider model.Provider `json:"provider" binding:"required"` // "openrouter", "openai", "anthropic", "google"
+	APIKey   string         `json:"api_key" binding:"required"`
 }
 
 // RegisterKey godoc
@@ -43,6 +44,13 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "provider and api_key are required"})
 		return
 	}
+
+	provider, err := model.ParseProvider(string(req.Provider))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.Provider = provider
 
 	record, err := h.keyService.RegisterKey(c.Request.Context(), userID, req.Provider, req.APIKey)
 	if err != nil {
@@ -93,10 +101,14 @@ func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
 // @Router /api/v1/user/api-keys/{provider} [delete]
 func (h *UserAPIKeyHandler) DeleteKey(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
-	providerName := c.Param("provider")
+	provider, err := model.ParseProvider(c.Param("provider"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	if err := h.keyService.DeleteKey(c.Request.Context(), userID, providerName); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found for provider: " + providerName})
+	if err := h.keyService.DeleteKey(c.Request.Context(), userID, provider); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found for provider: " + string(provider)})
 		return
 	}
 

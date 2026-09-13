@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"study-gin-clerk/internal/model"
 )
 
 type ModelRegistry struct {
@@ -24,7 +26,7 @@ func NewModelRegistry() *ModelRegistry {
 }
 
 // ValidateKey tests whether the given API key is valid for the specified provider by making a probe call.
-func (r *ModelRegistry) ValidateKey(ctx context.Context, providerName, apiKey string) error {
+func (r *ModelRegistry) ValidateKey(ctx context.Context, providerName model.Provider, apiKey string) error {
 	models, err := r.FetchModels(ctx, providerName, apiKey)
 	if err != nil {
 		return err
@@ -36,22 +38,21 @@ func (r *ModelRegistry) ValidateKey(ctx context.Context, providerName, apiKey st
 }
 
 // FetchModels dynamically fetches available models from the provider's API.
-func (r *ModelRegistry) FetchModels(ctx context.Context, providerName, apiKey string) ([]ModelInfo, error) {
-	providerName = strings.ToLower(strings.TrimSpace(providerName))
+func (r *ModelRegistry) FetchModels(ctx context.Context, providerName model.Provider, apiKey string) ([]ModelInfo, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return nil, errors.New("API key is required")
 	}
 
 	switch providerName {
-	case "openrouter":
+	case model.ProviderOpenRouter:
 		return r.fetchOpenRouterModels(ctx, apiKey)
-	case "openai":
+	case model.ProviderOpenAI:
 		return r.fetchOpenAIModels(ctx, apiKey)
-	case "anthropic":
+	case model.ProviderAnthropic:
 		return r.fetchAnthropicModels(ctx, apiKey)
-	case "google", "gemini":
-		return r.fetchGeminiModels(ctx, apiKey)
+	case model.ProviderGoogle:
+		return r.fetchGoogleModels(ctx, apiKey)
 	default:
 		return nil, fmt.Errorf("unsupported provider: '%s'", providerName)
 	}
@@ -97,7 +98,7 @@ func (r *ModelRegistry) fetchOpenRouterModels(ctx context.Context, apiKey string
 		models = append(models, ModelInfo{
 			ID:          m.ID,
 			Name:        name,
-			Provider:    "openrouter",
+			Provider:    model.ProviderOpenRouter,
 			Description: m.Description,
 			ContextLen:  m.ContextLength,
 		})
@@ -143,7 +144,7 @@ func (r *ModelRegistry) fetchOpenAIModels(ctx context.Context, apiKey string) ([
 			models = append(models, ModelInfo{
 				ID:       m.ID,
 				Name:     m.ID,
-				Provider: "openai",
+				Provider: model.ProviderOpenAI,
 			})
 		}
 	}
@@ -189,13 +190,13 @@ func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string)
 		models = append(models, ModelInfo{
 			ID:       m.ID,
 			Name:     name,
-			Provider: "anthropic",
+			Provider: model.ProviderAnthropic,
 		})
 	}
 	return models, nil
 }
 
-func (r *ModelRegistry) fetchGeminiModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
+func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([]ModelInfo, error) {
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", apiKey)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -204,13 +205,13 @@ func (r *ModelRegistry) fetchGeminiModels(ctx context.Context, apiKey string) ([
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("gemini request failed: %w", err)
+		return nil, fmt.Errorf("google request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("gemini API error (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("google API error (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var res struct {
@@ -224,7 +225,7 @@ func (r *ModelRegistry) fetchGeminiModels(ctx context.Context, apiKey string) ([
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return nil, fmt.Errorf("failed to parse gemini response: %w", err)
+		return nil, fmt.Errorf("failed to parse google response: %w", err)
 	}
 
 	var models []ModelInfo
@@ -250,7 +251,7 @@ func (r *ModelRegistry) fetchGeminiModels(ctx context.Context, apiKey string) ([
 		models = append(models, ModelInfo{
 			ID:          cleanID,
 			Name:        displayName,
-			Provider:    "google",
+			Provider:    model.ProviderGoogle,
 			Description: m.Description,
 			ContextLen:  m.InputTokenLimit,
 		})
