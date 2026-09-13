@@ -46,4 +46,3 @@ func ParseProvider(s string) (Provider, error) {
 	}
 	return normalized, nil
 }
-

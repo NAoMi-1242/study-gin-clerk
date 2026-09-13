@@ -38,9 +38,12 @@ func NewMemoryCache(ttl time.Duration) *MemoryCache {
 	return c
 }
 
-// NewMemoryCacheDefault creates a MemoryCache with default 15-minute TTL (for DI).
-func NewMemoryCacheDefault() *MemoryCache {
-	return NewMemoryCache(15 * time.Minute)
+// NewMemoryCacheDefault creates a MemoryCache with default 15-minute TTL and a cleanup function (for DI).
+func NewMemoryCacheDefault() (*MemoryCache, func()) {
+	c := NewMemoryCache(15 * time.Minute)
+	return c, func() {
+		c.Close()
+	}
 }
 
 // Close stops the periodic background cleanup goroutine.

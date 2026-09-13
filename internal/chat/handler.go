@@ -139,6 +139,17 @@ func (h *Handler) parseSendMessageRequest(c *gin.Context) (uint, *SendMessageReq
 		return 0, nil, false
 	}
 
+	req.Content = strings.TrimSpace(req.Content)
+	if req.Content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content cannot be empty or whitespace only"})
+		return 0, nil, false
+	}
+	req.Model = strings.TrimSpace(req.Model)
+	if req.Model == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "model is required"})
+		return 0, nil, false
+	}
+
 	provider, err := types.ParseProvider(string(req.Provider))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -288,4 +299,3 @@ func parseUintParam(c *gin.Context, paramName string) (uint, error) {
 	}
 	return uint(parsed), nil
 }
-

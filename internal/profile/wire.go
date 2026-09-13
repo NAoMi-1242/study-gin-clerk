@@ -7,4 +7,3 @@ var Set = wire.NewSet(
 	NewService,
 	NewHandler,
 )
-

@@ -14,4 +14,3 @@ type Profile struct {
 func (Profile) TableName() string {
 	return "user_profiles"
 }
-

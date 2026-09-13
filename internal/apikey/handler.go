@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -52,6 +53,11 @@ func (h *Handler) RegisterKey(c *gin.Context) {
 		return
 	}
 	req.Provider = provider
+	req.APIKey = strings.TrimSpace(req.APIKey)
+	if req.APIKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "api_key cannot be empty or whitespace only"})
+		return
+	}
 
 	record, err := h.service.RegisterKey(c.Request.Context(), userID, req.Provider, req.APIKey)
 	if err != nil {
@@ -131,4 +137,3 @@ func (h *Handler) DeleteKey(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "API key deleted successfully"})
 }
-

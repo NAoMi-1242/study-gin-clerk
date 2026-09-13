@@ -44,4 +44,3 @@ func (h *Handler) ListModels(c *gin.Context) {
 		"models":           models,
 	})
 }
-

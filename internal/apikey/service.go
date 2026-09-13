@@ -135,4 +135,3 @@ func (s *Service) GetDecryptedKeys(ctx context.Context, userID string) ([]Decryp
 
 	return keys, nil
 }
-

@@ -12,4 +12,3 @@ var (
 	// ErrAIProvider indicates an upstream error from an external AI service provider.
 	ErrAIProvider = errors.New("AI provider error")
 )
-

@@ -82,3 +82,33 @@ func (r *Repository) CreateMessage(ctx context.Context, chatID uint, role Role, 
 	return msg, nil
 }
 
+// CreateMessagePair persists both a user message and an assistant reply in a single atomic transaction.
+func (r *Repository) CreateMessagePair(ctx context.Context, chatID uint, userContent, aiContent string) (*Message, *Message, error) {
+	userMsg := &Message{
+		ChatID:  chatID,
+		Role:    RoleUser,
+		Content: userContent,
+	}
+	aiMsg := &Message{
+		ChatID:  chatID,
+		Role:    RoleAssistant,
+		Content: aiContent,
+	}
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(userMsg).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(aiMsg).Error; err != nil {
+			return err
+		}
+		return tx.Model(&Chat{}).
+			Where("id = ?", chatID).
+			Update("updated_at", time.Now()).Error
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return userMsg, aiMsg, nil
+}

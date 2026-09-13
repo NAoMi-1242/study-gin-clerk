@@ -38,6 +38,5 @@ func (s *Service) UpdateSystemPrompt(ctx context.Context, userID, systemPrompt s
 	if err := s.repo.Upsert(ctx, p); err != nil {
 		return nil, err
 	}
-	return p, nil
+	return s.repo.GetByUserID(ctx, userID)
 }
-

@@ -65,4 +65,3 @@ func (r *Repository) DeleteByProvider(ctx context.Context, userID string, provid
 	}
 	return nil
 }
-

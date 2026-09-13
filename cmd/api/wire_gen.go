@@ -33,9 +33,10 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	profileHandler := profile.NewHandler(service)
 	apikeyRepository := apikey.NewRepository(gormDB)
 	modelRegistry := ai.NewModelRegistry()
-	memoryCache := ai.NewMemoryCacheDefault()
+	memoryCache, cleanup2 := ai.NewMemoryCacheDefault()
 	aesCipher, err := crypto.NewAESCipher(cfg)
 	if err != nil {
+		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
@@ -45,7 +46,7 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	aimodelHandler := aimodel.NewHandler(aimodelService)
 	chatRepository := chat.NewRepository(gormDB)
 	client := ai.NewClient(cfg)
-	chatService := chat.NewService(chatRepository, apikeyService, client, service)
+	chatService := chat.ProvideService(chatRepository, apikeyService, client, service)
 	chatHandler := chat.NewHandler(chatService)
 	dependencies := router.Dependencies{
 		Config:         cfg,
@@ -57,6 +58,7 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	}
 	engine := router.New(dependencies)
 	return engine, func() {
+		cleanup2()
 		cleanup()
 	}, nil
 }

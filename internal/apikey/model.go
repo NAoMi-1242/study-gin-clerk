@@ -40,4 +40,3 @@ func MaskKey(key string) string {
 	}
 	return key[:2] + "..." + key[len(key)-2:]
 }
-

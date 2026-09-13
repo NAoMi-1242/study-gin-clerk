@@ -36,4 +36,3 @@ func (r *Repository) Upsert(ctx context.Context, p *Profile) error {
 		DoUpdates: clause.AssignmentColumns([]string{"system_prompt", "updated_at"}),
 	}).Create(p).Error
 }
-

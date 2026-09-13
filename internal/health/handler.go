@@ -49,4 +49,3 @@ func (h *Handler) Get(c *gin.Context) {
 		"database": "connected",
 	})
 }
-

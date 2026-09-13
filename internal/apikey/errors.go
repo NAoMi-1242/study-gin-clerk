@@ -12,4 +12,3 @@ var (
 	// ErrValidationFailed indicates that request inputs or upstream API key probe failed.
 	ErrValidationFailed = errors.New("validation failed")
 )
-

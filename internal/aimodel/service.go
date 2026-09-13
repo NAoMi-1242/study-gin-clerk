@@ -59,4 +59,3 @@ func (s *Service) GetAvailableModels(ctx context.Context, userID string, refresh
 
 	return allModels, activeProviders, nil
 }
-

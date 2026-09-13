@@ -3,14 +3,24 @@ package chat
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/zendev-sh/goai"
 
-	"study-gin-clerk/internal/apikey"
 	"study-gin-clerk/internal/infra/ai"
 	"study-gin-clerk/internal/profile"
 	"study-gin-clerk/internal/types"
 )
+
+// KeyProvider defines the interface required by ChatService to retrieve decrypted API keys.
+type KeyProvider interface {
+	GetDecryptedKey(ctx context.Context, userID string, provider types.Provider) (string, error)
+}
+
+// ProfileProvider defines the interface required by ChatService to retrieve user profile settings.
+type ProfileProvider interface {
+	GetProfile(ctx context.Context, userID string) (*profile.Profile, error)
+}
 
 // StreamMessageResult holds the stream instance and message persistence hook.
 type StreamMessageResult struct {
@@ -20,28 +30,29 @@ type StreamMessageResult struct {
 }
 
 type Service struct {
-	repo           *Repository
-	apiKeyService  *apikey.Service
-	aiClient       *ai.Client
-	profileService *profile.Service
+	repo            *Repository
+	keyProvider     KeyProvider
+	aiClient        *ai.Client
+	profileProvider ProfileProvider
 }
 
 func NewService(
 	repo *Repository,
-	apiKeyService *apikey.Service,
+	keyProvider KeyProvider,
 	aiClient *ai.Client,
-	profileService *profile.Service,
+	profileProvider ProfileProvider,
 ) *Service {
 	return &Service{
-		repo:           repo,
-		apiKeyService:  apiKeyService,
-		aiClient:       aiClient,
-		profileService: profileService,
+		repo:            repo,
+		keyProvider:     keyProvider,
+		aiClient:        aiClient,
+		profileProvider: profileProvider,
 	}
 }
 
 // CreateChat creates a new conversation for the user.
 func (s *Service) CreateChat(ctx context.Context, userID, title string) (*Chat, error) {
+	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "新規チャット"
 	}
@@ -58,20 +69,19 @@ func (s *Service) GetChat(ctx context.Context, chatID uint, userID string) (*Cha
 	return s.repo.GetWithMessages(ctx, chatID, userID)
 }
 
-type chatSessionContext struct {
+type sessionContext struct {
 	chat         *Chat
 	apiKey       string
-	userMsg      *Message
 	systemPrompt string
 }
 
-func (s *Service) prepareSessionContext(
+func (s *Service) prepareSession(
 	ctx context.Context,
 	chatID uint,
-	userID, content string,
+	userID string,
 	providerName types.Provider,
 	modelID string,
-) (*chatSessionContext, error) {
+) (*sessionContext, error) {
 	if !providerName.IsValid() {
 		return nil, fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, providerName)
 	}
@@ -86,28 +96,21 @@ func (s *Service) prepareSessionContext(
 	}
 
 	// 2. ユーザーの API キーを復号して取得
-	apiKey, err := s.apiKeyService.GetDecryptedKey(ctx, userID, providerName)
+	apiKey, err := s.keyProvider.GetDecryptedKey(ctx, userID, providerName)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. ユーザーのメッセージを DB 保存
-	userMsg, err := s.repo.CreateMessage(ctx, chatID, RoleUser, content)
-	if err != nil {
-		return nil, fmt.Errorf("failed to save user message: %w", err)
-	}
-
-	// 4. ユーザーの最新システムプロンプトを取得 (動的適用)
-	userProfile, _ := s.profileService.GetProfile(ctx, userID)
+	// 3. ユーザーの最新システムプロンプトを取得 (動的適用)
+	userProfile, _ := s.profileProvider.GetProfile(ctx, userID)
 	systemPrompt := ""
 	if userProfile != nil {
 		systemPrompt = userProfile.SystemPrompt
 	}
 
-	return &chatSessionContext{
+	return &sessionContext{
 		chat:         c,
 		apiKey:       apiKey,
-		userMsg:      userMsg,
 		systemPrompt: systemPrompt,
 	}, nil
 }
@@ -131,7 +134,13 @@ func (s *Service) SendMessage(
 	providerName types.Provider,
 	modelID string,
 ) (*Message, *Message, error) {
-	session, err := s.prepareSessionContext(ctx, chatID, userID, content, providerName, modelID)
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil, nil, fmt.Errorf("%w: content cannot be empty", ErrValidationFailed)
+	}
+	modelID = strings.TrimSpace(modelID)
+
+	session, err := s.prepareSession(ctx, chatID, userID, providerName, modelID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,13 +161,13 @@ func (s *Service) SendMessage(
 		return nil, nil, fmt.Errorf("%w: %s", ErrAIProvider, err.Error())
 	}
 
-	// AI の返答メッセージを DB 保存
-	aiMsg, err := s.repo.CreateMessage(ctx, chatID, RoleAssistant, aiContent)
+	// AI 生成成功後にユーザー発言と AI 返答を単一トランザクションでアトミックに DB 保存
+	userMsg, aiMsg, err := s.repo.CreateMessagePair(ctx, chatID, content, aiContent)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to save assistant message: %w", err)
+		return nil, nil, fmt.Errorf("failed to save messages: %w", err)
 	}
 
-	return session.userMsg, aiMsg, nil
+	return userMsg, aiMsg, nil
 }
 
 // StreamMessage prepares a streaming response using GoAI StreamText.
@@ -169,7 +178,13 @@ func (s *Service) StreamMessage(
 	providerName types.Provider,
 	modelID string,
 ) (*StreamMessageResult, error) {
-	session, err := s.prepareSessionContext(ctx, chatID, userID, content, providerName, modelID)
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil, fmt.Errorf("%w: content cannot be empty", ErrValidationFailed)
+	}
+	modelID = strings.TrimSpace(modelID)
+
+	session, err := s.prepareSession(ctx, chatID, userID, providerName, modelID)
 	if err != nil {
 		return nil, err
 	}
@@ -190,15 +205,20 @@ func (s *Service) StreamMessage(
 		return nil, fmt.Errorf("%w: %s", ErrAIProvider, err.Error())
 	}
 
+	// ストリーム接続確立後にユーザーメッセージを保存
+	userMsg, err := s.repo.CreateMessage(ctx, chatID, RoleUser, content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save user message: %w", err)
+	}
+
 	// ストリーム完了時に呼び出す DB 保存コールバック
 	onComplete := func(fullText string) (*Message, error) {
 		return s.repo.CreateMessage(context.Background(), chatID, RoleAssistant, fullText)
 	}
 
 	return &StreamMessageResult{
-		UserMessage: session.userMsg,
+		UserMessage: userMsg,
 		TextStream:  stream,
 		OnComplete:  onComplete,
 	}, nil
 }
-

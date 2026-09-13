@@ -78,4 +78,3 @@ func (h *Handler) UpdateSystemPrompt(c *gin.Context) {
 
 	c.JSON(http.StatusOK, p)
 }
-
