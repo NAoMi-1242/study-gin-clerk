@@ -143,7 +143,7 @@ const docTemplate = `{
                 "summary": "チャット新規作成",
                 "parameters": [
                     {
-                        "description": "チャット設定 (タイトル)",
+                        "description": "チャット設定 (タイトル, 最大255文字)",
                         "name": "request",
                         "in": "body",
                         "schema": {
@@ -156,6 +156,15 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/model.Chat"
+                        }
+                    },
+                    "400": {
+                        "description": "不正なリクエスト",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "401": {
@@ -322,8 +331,8 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "403": {
-                        "description": "認可エラー・トークン不正",
+                    "404": {
+                        "description": "チャットが見つからない",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -333,6 +342,15 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "AIプロバイダ通信エラー",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -404,8 +422,26 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "404": {
+                        "description": "チャットが見つからない",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "サーバーエラー",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "AIプロバイダ通信エラー",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -423,7 +459,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "認証済みユーザーのプロファイル情報を取得します",
+                "description": "認証済みユーザーのプロファイル情報およびシステムプロンプトを取得します",
                 "produces": [
                     "application/json"
                 ],
@@ -435,7 +471,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/service.UserProfile"
+                            "$ref": "#/definitions/model.UserProfile"
                         }
                     },
                     "401": {
@@ -449,6 +485,15 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "認可エラー・トークン不正",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "サーバーエラー",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -479,7 +524,7 @@ const docTemplate = `{
                 "summary": "システムプロンプト更新",
                 "parameters": [
                     {
-                        "description": "システムプロンプト設定",
+                        "description": "システムプロンプト設定 (最大10000文字)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -492,7 +537,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/service.UserProfile"
+                            "$ref": "#/definitions/model.UserProfile"
                         }
                     },
                     "400": {
@@ -675,6 +720,15 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "400": {
+                        "description": "不正なリクエスト",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "401": {
                         "description": "未認証",
                         "schema": {
@@ -707,17 +761,26 @@ const docTemplate = `{
         },
         "/health": {
             "get": {
-                "description": "サーバーの稼働状態を確認します",
+                "description": "サーバーおよびデータベースの稼働状態を確認します",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "health"
                 ],
-                "summary": "ヘルスチェック",
+                "summary": "ヘルスチェック (DB疎通確認)",
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "データベース接続異常",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -734,7 +797,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "title": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 }
             }
         },
@@ -746,7 +810,8 @@ const docTemplate = `{
             ],
             "properties": {
                 "api_key": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 500
                 },
                 "provider": {
                     "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
@@ -767,19 +832,15 @@ const docTemplate = `{
             ],
             "properties": {
                 "content": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 30000
                 },
                 "model": {
-                    "description": "e.g. \"anthropic/claude-3.5-sonnet\"",
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                 },
                 "provider": {
-                    "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.Provider"
-                        }
-                    ]
+                    "$ref": "#/definitions/model.Provider"
                 }
             }
         },
@@ -787,7 +848,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "system_prompt": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 10000
                 }
             }
         },
@@ -882,16 +944,16 @@ const docTemplate = `{
                 }
             }
         },
-        "service.UserProfile": {
+        "model.UserProfile": {
             "type": "object",
             "properties": {
-                "plan": {
-                    "type": "string"
-                },
-                "status": {
+                "created_at": {
                     "type": "string"
                 },
                 "system_prompt": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "user_id": {

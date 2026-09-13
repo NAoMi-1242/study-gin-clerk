@@ -3,11 +3,13 @@ definitions:
   handler.CreateChatRequest:
     properties:
       title:
+        maxLength: 255
         type: string
     type: object
   handler.RegisterAPIKeyRequest:
     properties:
       api_key:
+        maxLength: 500
         type: string
       provider:
         allOf:
@@ -20,14 +22,13 @@ definitions:
   handler.SendMessageRequest:
     properties:
       content:
+        maxLength: 30000
         type: string
       model:
-        description: e.g. "anthropic/claude-3.5-sonnet"
+        maxLength: 100
         type: string
       provider:
-        allOf:
-        - $ref: '#/definitions/model.Provider'
-        description: '"openrouter", "openai", "anthropic", "google"'
+        $ref: '#/definitions/model.Provider'
     required:
     - content
     - model
@@ -36,6 +37,7 @@ definitions:
   handler.UpdateSystemPromptRequest:
     properties:
       system_prompt:
+        maxLength: 10000
         type: string
     type: object
   model.Chat:
@@ -99,13 +101,13 @@ definitions:
       user_id:
         type: string
     type: object
-  service.UserProfile:
+  model.UserProfile:
     properties:
-      plan:
-        type: string
-      status:
+      created_at:
         type: string
       system_prompt:
+        type: string
+      updated_at:
         type: string
       user_id:
         type: string
@@ -192,7 +194,7 @@ paths:
       - application/json
       description: 新しい会話セッションを作成します（モデル指定は不要でメッセージ送信時に選択します）
       parameters:
-      - description: チャット設定 (タイトル)
+      - description: チャット設定 (タイトル, 最大255文字)
         in: body
         name: request
         schema:
@@ -204,6 +206,12 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/model.Chat'
+        "400":
+          description: 不正なリクエスト
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "401":
           description: 未認証
           schema:
@@ -310,14 +318,20 @@ paths:
             additionalProperties:
               type: string
             type: object
-        "403":
-          description: 認可エラー・トークン不正
+        "404":
+          description: チャットが見つからない
           schema:
             additionalProperties:
               type: string
             type: object
         "500":
           description: サーバーエラー
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "502":
+          description: AIプロバイダ通信エラー
           schema:
             additionalProperties:
               type: string
@@ -363,8 +377,20 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: チャットが見つからない
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: サーバーエラー
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "502":
+          description: AIプロバイダ通信エラー
           schema:
             additionalProperties:
               type: string
@@ -376,14 +402,14 @@ paths:
       - chats
   /api/v1/me:
     get:
-      description: 認証済みユーザーのプロファイル情報を取得します
+      description: 認証済みユーザーのプロファイル情報およびシステムプロンプトを取得します
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/service.UserProfile'
+            $ref: '#/definitions/model.UserProfile'
         "401":
           description: 未認証
           schema:
@@ -392,6 +418,12 @@ paths:
             type: object
         "403":
           description: 認可エラー・トークン不正
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: サーバーエラー
           schema:
             additionalProperties:
               type: string
@@ -407,7 +439,7 @@ paths:
       - application/json
       description: ユーザー共通のデフォルトシステムプロンプトを更新・保存します
       parameters:
-      - description: システムプロンプト設定
+      - description: システムプロンプト設定 (最大10000文字)
         in: body
         name: request
         required: true
@@ -419,7 +451,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/service.UserProfile'
+            $ref: '#/definitions/model.UserProfile'
         "400":
           description: 不正なリクエスト
           schema:
@@ -535,6 +567,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "400":
+          description: 不正なリクエスト
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "401":
           description: 未認証
           schema:
@@ -560,7 +598,7 @@ paths:
       - api_keys
   /health:
     get:
-      description: サーバーの稼働状態を確認します
+      description: サーバーおよびデータベースの稼働状態を確認します
       produces:
       - application/json
       responses:
@@ -570,7 +608,13 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: ヘルスチェック
+        "503":
+          description: データベース接続異常
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: ヘルスチェック (DB疎通確認)
       tags:
       - health
 securityDefinitions:

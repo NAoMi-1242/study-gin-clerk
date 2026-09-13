@@ -19,12 +19,12 @@ import (
 
 // Injectors from wire.go:
 
-func InitializeApp(cfg config.Config) (*gin.Engine, error) {
-	healthHandler := handler.NewHealthHandler()
-	gormDB, err := db.NewDB(cfg)
+func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
+	gormDB, cleanup, err := db.NewDB(cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	healthHandler := handler.NewHealthHandler(gormDB)
 	userProfileRepository := repository.NewUserProfileRepository(gormDB)
 	userService := service.NewUserService(userProfileRepository)
 	userHandler := handler.NewUserHandler(userService)
@@ -33,12 +33,13 @@ func InitializeApp(cfg config.Config) (*gin.Engine, error) {
 	modelRegistry := ai.NewModelRegistry()
 	memoryCache := ai.NewMemoryCacheDefault()
 	userAPIKeyService := service.NewUserAPIKeyService(userAPIKeyRepository, modelRegistry, memoryCache, cfg)
-	client := ai.NewClient()
+	client := ai.NewClient(cfg)
 	chatService := service.NewChatService(chatRepository, userAPIKeyService, client, userProfileRepository)
 	chatHandler := handler.NewChatHandler(chatService)
 	userAPIKeyHandler := handler.NewUserAPIKeyHandler(userAPIKeyService)
 	aiHandler := handler.NewAIHandler(userAPIKeyService)
 	dependencies := router.Dependencies{
+		Config:            cfg,
 		HealthHandler:     healthHandler,
 		UserHandler:       userHandler,
 		ChatHandler:       chatHandler,
@@ -46,5 +47,7 @@ func InitializeApp(cfg config.Config) (*gin.Engine, error) {
 		AIHandler:         aiHandler,
 	}
 	engine := router.New(dependencies)
-	return engine, nil
+	return engine, func() {
+		cleanup()
+	}, nil
 }

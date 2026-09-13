@@ -1,26 +1,51 @@
 package handler
 
 import (
-    "net/http"
+	"log/slog"
+	"net/http"
 
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-type HealthHandler struct{}
+type HealthHandler struct {
+	db *gorm.DB
+}
 
-func NewHealthHandler() *HealthHandler {
-    return &HealthHandler{}
+func NewHealthHandler(db *gorm.DB) *HealthHandler {
+	return &HealthHandler{db: db}
 }
 
 // Get godoc
-// @Summary ヘルスチェック
-// @Description サーバーの稼働状態を確認します
+// @Summary ヘルスチェック (DB疎通確認)
+// @Description サーバーおよびデータベースの稼働状態を確認します
 // @Tags health
 // @Produce json
 // @Success 200 {object} map[string]string
+// @Failure 503 {object} map[string]string "データベース接続異常"
 // @Router /health [get]
 func (h *HealthHandler) Get(c *gin.Context) {
-    c.JSON(http.StatusOK, gin.H{
-        "status": "ok",
-    })
+	sqlDB, err := h.db.DB()
+	if err != nil {
+		slog.Error("health check failed: failed to get sql.DB", "error", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":   "error",
+			"database": "unavailable",
+		})
+		return
+	}
+
+	if err := sqlDB.PingContext(c.Request.Context()); err != nil {
+		slog.Error("health check failed: db ping error", "error", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":   "error",
+			"database": "unreachable",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "ok",
+		"database": "connected",
+	})
 }

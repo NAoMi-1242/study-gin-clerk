@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -34,7 +35,8 @@ func (h *AIHandler) ListModels(c *gin.Context) {
 
 	models, activeProviders, err := h.keyService.GetAvailableModels(c.Request.Context(), userID, refresh)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve models: " + err.Error()})
+		slog.Error("failed to retrieve models", "error", err, "user_id", userID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve models"})
 		return
 	}
 
@@ -43,4 +45,3 @@ func (h *AIHandler) ListModels(c *gin.Context) {
 		"models":           models,
 	})
 }
-

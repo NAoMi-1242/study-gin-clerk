@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,7 +22,7 @@ func NewUserAPIKeyHandler(keyService *service.UserAPIKeyService) *UserAPIKeyHand
 
 type RegisterAPIKeyRequest struct {
 	Provider model.Provider `json:"provider" binding:"required"` // "openrouter", "openai", "anthropic", "google"
-	APIKey   string         `json:"api_key" binding:"required"`
+	APIKey   string         `json:"api_key" binding:"required,max=500"`
 }
 
 // RegisterKey godoc
@@ -41,7 +43,7 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 
 	var req RegisterAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "provider and api_key are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider and api_key (max 500 chars) are required"})
 		return
 	}
 
@@ -54,7 +56,12 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 
 	record, err := h.keyService.RegisterKey(c.Request.Context(), userID, req.Provider, req.APIKey)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if strings.Contains(err.Error(), "validation failed") || strings.Contains(err.Error(), "unsupported provider") || strings.Contains(err.Error(), "required") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		slog.Error("failed to register API key", "error", err, "user_id", userID, "provider", req.Provider)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save API key"})
 		return
 	}
 
@@ -80,6 +87,7 @@ func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
 
 	keys, err := h.keyService.ListKeys(c.Request.Context(), userID)
 	if err != nil {
+		slog.Error("failed to list API keys", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list API keys"})
 		return
 	}
@@ -95,6 +103,7 @@ func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
 // @Produce json
 // @Param provider path string true "Provider Name (e.g. openrouter)"
 // @Success 200 {object} map[string]string "削除成功"
+// @Failure 400 {object} map[string]string "不正なリクエスト"
 // @Failure 401 {object} map[string]string "未認証"
 // @Failure 404 {object} map[string]string "キーが見つからない"
 // @Failure 500 {object} map[string]string "サーバーエラー"
@@ -108,10 +117,10 @@ func (h *UserAPIKeyHandler) DeleteKey(c *gin.Context) {
 	}
 
 	if err := h.keyService.DeleteKey(c.Request.Context(), userID, provider); err != nil {
+		slog.Warn("API key deletion failed or not found", "error", err, "user_id", userID, "provider", provider)
 		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found for provider: " + string(provider)})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "API key deleted successfully"})
 }
-
