@@ -11,12 +11,12 @@ import (
 )
 
 type UserProfileHandler struct {
-	profileService *service.UserProfileService
+	userProfileService *service.UserProfileService
 }
 
-func NewUserProfileHandler(profileService *service.UserProfileService) *UserProfileHandler {
+func NewUserProfileHandler(userProfileService *service.UserProfileService) *UserProfileHandler {
 	return &UserProfileHandler{
-		profileService: profileService,
+		userProfileService: userProfileService,
 	}
 }
 
@@ -34,7 +34,7 @@ func NewUserProfileHandler(profileService *service.UserProfileService) *UserProf
 func (h *UserProfileHandler) GetMe(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
-	profile, err := h.profileService.GetProfile(c.Request.Context(), userID)
+	profile, err := h.userProfileService.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		slog.Error("failed to get profile", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -72,7 +72,7 @@ func (h *UserProfileHandler) UpdateSystemPrompt(c *gin.Context) {
 		return
 	}
 
-	profile, err := h.profileService.UpdateSystemPrompt(c.Request.Context(), userID, req.SystemPrompt)
+	profile, err := h.userProfileService.UpdateSystemPrompt(c.Request.Context(), userID, req.SystemPrompt)
 	if err != nil {
 		slog.Error("failed to update system prompt", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update system prompt"})

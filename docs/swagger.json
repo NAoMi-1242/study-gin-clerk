@@ -510,7 +510,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_keys"
+                    "user_api_keys"
                 ],
                 "summary": "登録済み API キー一覧",
                 "responses": {
@@ -560,7 +560,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_keys"
+                    "user_api_keys"
                 ],
                 "summary": "API キー登録・更新",
                 "parameters": [
@@ -626,7 +626,7 @@
                     "application/json"
                 ],
                 "tags": [
-                    "api_keys"
+                    "user_api_keys"
                 ],
                 "summary": "登録済み API キー削除",
                 "parameters": [

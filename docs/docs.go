@@ -516,7 +516,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_keys"
+                    "user_api_keys"
                 ],
                 "summary": "登録済み API キー一覧",
                 "responses": {
@@ -566,7 +566,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_keys"
+                    "user_api_keys"
                 ],
                 "summary": "API キー登録・更新",
                 "parameters": [
@@ -632,7 +632,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_keys"
+                    "user_api_keys"
                 ],
                 "summary": "登録済み API キー削除",
                 "parameters": [

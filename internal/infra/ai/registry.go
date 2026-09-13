@@ -197,11 +197,11 @@ func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string)
 }
 
 func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([]model.AIModelInfo, error) {
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", apiKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://generativelanguage.googleapis.com/v1beta/models", nil)
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("x-goog-api-key", apiKey)
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {

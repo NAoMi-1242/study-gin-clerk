@@ -28,7 +28,7 @@ type RegisterAPIKeyRequest struct {
 // RegisterKey godoc
 // @Summary API キー登録・更新
 // @Description ユーザー独自の各社 AI API キーを登録します。登録時にプロバイダへの疎通確認を行い、AES-256-GCM で暗号化して安全に保存します。
-// @Tags api_keys
+// @Tags user_api_keys
 // @Security BearerAuth
 // @Accept json
 // @Produce json
@@ -75,7 +75,7 @@ func (h *UserAPIKeyHandler) RegisterKey(c *gin.Context) {
 // ListKeys godoc
 // @Summary 登録済み API キー一覧
 // @Description ユーザーが登録した各社 API キーの一覧（マスクされた key_hint のみ）を取得します。
-// @Tags api_keys
+// @Tags user_api_keys
 // @Security BearerAuth
 // @Produce json
 // @Success 200 {object} map[string][]model.UserAPIKey
@@ -98,7 +98,7 @@ func (h *UserAPIKeyHandler) ListKeys(c *gin.Context) {
 // DeleteKey godoc
 // @Summary 登録済み API キー削除
 // @Description 指定されたプロバイダの API キーを削除し、モデルキャッシュをパージします。
-// @Tags api_keys
+// @Tags user_api_keys
 // @Security BearerAuth
 // @Produce json
 // @Param provider path string true "Provider Name (e.g. openrouter)"

@@ -90,21 +90,3 @@ func Decrypt(cipherTextBase64, keyStr string) (string, error) {
 	return string(plainTextBytes), nil
 }
 
-// MaskAPIKey masks an API key for safe UI display (e.g., "sk-or-v1-...abcd").
-func MaskAPIKey(key string) string {
-	key = strings.TrimSpace(key)
-	if len(key) <= 8 {
-		return "****"
-	}
-	if strings.HasPrefix(key, "sk-or-v1-") && len(key) > 13 {
-		return "sk-or-v1-..." + key[len(key)-4:]
-	}
-	if strings.HasPrefix(key, "sk-") && len(key) > 8 {
-		return "sk-..." + key[len(key)-4:]
-	}
-	if len(key) > 12 {
-		return key[:6] + "..." + key[len(key)-4:]
-	}
-	return key[:2] + "..." + key[len(key)-2:]
-}
-
