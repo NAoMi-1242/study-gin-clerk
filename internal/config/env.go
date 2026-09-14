@@ -8,17 +8,18 @@ import (
 )
 
 type Config struct {
-	Port           string
-	AppURL         string
-	ClerkSecretKey string
-	DatabaseURL    string
-	EncryptionKey  string
+	Port               string
+	AppURL             string
+	CORSAllowedOrigins []string
+	ClerkSecretKey     string
+	DatabaseURL        string
+	EncryptionKey      string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
 		Port:           os.Getenv("PORT"),
-		AppURL:         os.Getenv("APP_URL"),
+		AppURL:         strings.TrimSpace(os.Getenv("APP_URL")),
 		ClerkSecretKey: os.Getenv("CLERK_SECRET_KEY"),
 		DatabaseURL:    os.Getenv("DATABASE_URL"),
 		EncryptionKey:  os.Getenv("ENCRYPTION_KEY"),
@@ -31,6 +32,20 @@ func Load() (Config, error) {
 	if cfg.AppURL == "" {
 		return Config{}, fmt.Errorf("APP_URL is required")
 	}
+
+	corsOriginsEnv := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	var corsOrigins []string
+	if corsOriginsEnv != "" {
+		for _, o := range strings.Split(corsOriginsEnv, ",") {
+			if trimmed := strings.TrimSpace(o); trimmed != "" {
+				corsOrigins = append(corsOrigins, trimmed)
+			}
+		}
+	} else {
+		// CORS_ALLOWED_ORIGINS 未指定時は AppURL をデフォルト採用
+		corsOrigins = []string{cfg.AppURL}
+	}
+	cfg.CORSAllowedOrigins = corsOrigins
 
 	if cfg.ClerkSecretKey == "" {
 		return Config{}, fmt.Errorf("CLERK_SECRET_KEY is required")

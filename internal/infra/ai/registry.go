@@ -13,59 +13,87 @@ import (
 	"study-gin-clerk/internal/types"
 )
 
-type ModelRegistry struct {
-	httpClient *http.Client
+// ProviderFetcher defines the strategy for discovering and validating models for a specific AI provider.
+type ProviderFetcher interface {
+	FetchModels(ctx context.Context, apiKey string) ([]types.AIModel, error)
+	ValidateKey(ctx context.Context, apiKey string) error
 }
 
+// ModelFetcher represents the registry that coordinates model fetching across providers.
+type ModelFetcher interface {
+	FetchModels(ctx context.Context, providerName types.Provider, apiKey string) ([]types.AIModel, error)
+	ValidateKey(ctx context.Context, providerName types.Provider, apiKey string) error
+}
+
+// ModelRegistry dispatches model discovery requests to individual provider fetchers.
+type ModelRegistry struct {
+	fetchers map[types.Provider]ProviderFetcher
+}
+
+// NewModelRegistry creates a new ModelRegistry with standard HTTP-based provider fetchers.
 func NewModelRegistry() *ModelRegistry {
+	httpClient := &http.Client{
+		Timeout: 20 * time.Second,
+	}
+
 	return &ModelRegistry{
-		httpClient: &http.Client{
-			Timeout: 20 * time.Second,
+		fetchers: map[types.Provider]ProviderFetcher{
+			types.ProviderOpenRouter: newOpenRouterFetcher(httpClient),
+			types.ProviderOpenAI:     newOpenAIFetcher(httpClient),
+			types.ProviderAnthropic:  newAnthropicFetcher(httpClient),
+			types.ProviderGoogle:     newGoogleFetcher(httpClient),
 		},
 	}
 }
 
-// ValidateKey tests whether the given API key is valid for the specified provider by making a probe call.
+// ValidateKey tests whether the given API key is valid for the specified provider.
 func (r *ModelRegistry) ValidateKey(ctx context.Context, providerName types.Provider, apiKey string) error {
-	models, err := r.FetchModels(ctx, providerName, apiKey)
-	if err != nil {
-		return err
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return errors.New("API key is required")
 	}
-	if len(models) == 0 {
-		return fmt.Errorf("no models available for provider '%s'", providerName)
+
+	fetcher, ok := r.fetchers[providerName]
+	if !ok {
+		return fmt.Errorf("unsupported provider: '%s'", providerName)
 	}
-	return nil
+
+	return fetcher.ValidateKey(ctx, apiKey)
 }
 
-// FetchModels dynamically fetches available models from the provider's API.
+// FetchModels dynamically fetches available models from the specified provider's API.
 func (r *ModelRegistry) FetchModels(ctx context.Context, providerName types.Provider, apiKey string) ([]types.AIModel, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return nil, errors.New("API key is required")
 	}
 
-	switch providerName {
-	case types.ProviderOpenRouter:
-		return r.fetchOpenRouterModels(ctx, apiKey)
-	case types.ProviderOpenAI:
-		return r.fetchOpenAIModels(ctx, apiKey)
-	case types.ProviderAnthropic:
-		return r.fetchAnthropicModels(ctx, apiKey)
-	case types.ProviderGoogle:
-		return r.fetchGoogleModels(ctx, apiKey)
-	default:
+	fetcher, ok := r.fetchers[providerName]
+	if !ok {
 		return nil, fmt.Errorf("unsupported provider: '%s'", providerName)
 	}
+
+	return fetcher.FetchModels(ctx, apiKey)
 }
 
-func (r *ModelRegistry) fetchOpenRouterModels(ctx context.Context, apiKey string) ([]types.AIModel, error) {
+// --- Provider Fetcher Implementations (Strategy Pattern) ---
+
+type openRouterFetcher struct {
+	httpClient *http.Client
+}
+
+func newOpenRouterFetcher(c *http.Client) *openRouterFetcher {
+	return &openRouterFetcher{httpClient: c}
+}
+
+func (f *openRouterFetcher) FetchModels(ctx context.Context, apiKey string) ([]types.AIModel, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://openrouter.ai/api/v1/models", nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := r.httpClient.Do(req)
+	resp, err := f.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("openrouter request failed: %w", err)
 	}
@@ -106,14 +134,33 @@ func (r *ModelRegistry) fetchOpenRouterModels(ctx context.Context, apiKey string
 	return models, nil
 }
 
-func (r *ModelRegistry) fetchOpenAIModels(ctx context.Context, apiKey string) ([]types.AIModel, error) {
+func (f *openRouterFetcher) ValidateKey(ctx context.Context, apiKey string) error {
+	models, err := f.FetchModels(ctx, apiKey)
+	if err != nil {
+		return err
+	}
+	if len(models) == 0 {
+		return fmt.Errorf("no models available for provider '%s'", types.ProviderOpenRouter)
+	}
+	return nil
+}
+
+type openAIFetcher struct {
+	httpClient *http.Client
+}
+
+func newOpenAIFetcher(c *http.Client) *openAIFetcher {
+	return &openAIFetcher{httpClient: c}
+}
+
+func (f *openAIFetcher) FetchModels(ctx context.Context, apiKey string) ([]types.AIModel, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.openai.com/v1/models", nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := r.httpClient.Do(req)
+	resp, err := f.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("openai request failed: %w", err)
 	}
@@ -136,7 +183,6 @@ func (r *ModelRegistry) fetchOpenAIModels(ctx context.Context, apiKey string) ([
 
 	var models []types.AIModel
 	for _, m := range res.Data {
-		// Filter for chat completion models only (gpt-*, o1*, o3*, chatgpt-*)
 		if strings.HasPrefix(m.ID, "gpt-") ||
 			strings.HasPrefix(m.ID, "o1") ||
 			strings.HasPrefix(m.ID, "o3") ||
@@ -151,7 +197,26 @@ func (r *ModelRegistry) fetchOpenAIModels(ctx context.Context, apiKey string) ([
 	return models, nil
 }
 
-func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string) ([]types.AIModel, error) {
+func (f *openAIFetcher) ValidateKey(ctx context.Context, apiKey string) error {
+	models, err := f.FetchModels(ctx, apiKey)
+	if err != nil {
+		return err
+	}
+	if len(models) == 0 {
+		return fmt.Errorf("no models available for provider '%s'", types.ProviderOpenAI)
+	}
+	return nil
+}
+
+type anthropicFetcher struct {
+	httpClient *http.Client
+}
+
+func newAnthropicFetcher(c *http.Client) *anthropicFetcher {
+	return &anthropicFetcher{httpClient: c}
+}
+
+func (f *anthropicFetcher) FetchModels(ctx context.Context, apiKey string) ([]types.AIModel, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.anthropic.com/v1/models", nil)
 	if err != nil {
 		return nil, err
@@ -159,7 +224,7 @@ func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string)
 	req.Header.Set("x-api-key", apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := r.httpClient.Do(req)
+	resp, err := f.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("anthropic request failed: %w", err)
 	}
@@ -196,14 +261,33 @@ func (r *ModelRegistry) fetchAnthropicModels(ctx context.Context, apiKey string)
 	return models, nil
 }
 
-func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([]types.AIModel, error) {
+func (f *anthropicFetcher) ValidateKey(ctx context.Context, apiKey string) error {
+	models, err := f.FetchModels(ctx, apiKey)
+	if err != nil {
+		return err
+	}
+	if len(models) == 0 {
+		return fmt.Errorf("no models available for provider '%s'", types.ProviderAnthropic)
+	}
+	return nil
+}
+
+type googleFetcher struct {
+	httpClient *http.Client
+}
+
+func newGoogleFetcher(c *http.Client) *googleFetcher {
+	return &googleFetcher{httpClient: c}
+}
+
+func (f *googleFetcher) FetchModels(ctx context.Context, apiKey string) ([]types.AIModel, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://generativelanguage.googleapis.com/v1beta/models", nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("x-goog-api-key", apiKey)
 
-	resp, err := r.httpClient.Do(req)
+	resp, err := f.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("google request failed: %w", err)
 	}
@@ -230,7 +314,6 @@ func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([
 
 	var models []types.AIModel
 	for _, m := range res.Models {
-		// Filter for generateContent support
 		supportsGenerate := false
 		for _, method := range m.SupportedGenerationMethods {
 			if method == "generateContent" {
@@ -257,4 +340,15 @@ func (r *ModelRegistry) fetchGoogleModels(ctx context.Context, apiKey string) ([
 		})
 	}
 	return models, nil
+}
+
+func (f *googleFetcher) ValidateKey(ctx context.Context, apiKey string) error {
+	models, err := f.FetchModels(ctx, apiKey)
+	if err != nil {
+		return err
+	}
+	if len(models) == 0 {
+		return fmt.Errorf("no models available for provider '%s'", types.ProviderGoogle)
+	}
+	return nil
 }

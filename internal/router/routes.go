@@ -1,7 +1,6 @@
 package router
 
 import (
-	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -32,11 +31,9 @@ func New(deps Dependencies) *gin.Engine {
 	engine := gin.Default()
 
 	// CORS 設定 (フロントエンドからの通信を許可)
-	var allowedOrigins []string
-	for _, origin := range strings.Split(deps.Config.AppURL, ",") {
-		if trimmed := strings.TrimSpace(origin); trimmed != "" {
-			allowedOrigins = append(allowedOrigins, trimmed)
-		}
+	allowedOrigins := deps.Config.CORSAllowedOrigins
+	if len(allowedOrigins) == 0 && deps.Config.AppURL != "" {
+		allowedOrigins = []string{deps.Config.AppURL}
 	}
 
 	engine.Use(cors.New(cors.Config{

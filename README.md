@@ -1,8 +1,8 @@
 # Go + Gin + Clerk 認証 & AI チャット基盤 API
 
-本プロジェクトは、**Go (Gin)** と **Clerk** による堅牢な認証基盤の上に、将来的な **GORM (Supabase)** および **Go AI (LLM)** を統合した「AI チャットアプリケーション」を見据えたバックエンド API サーバーです。
+本プロジェクトは、**Go (Gin)** と **Clerk** による認証基盤の上に、**GORM (PostgreSQL)** および **GoAI (マルチプロバイダ LLM: OpenRouter, OpenAI, Claude, Gemini)** を統合した「AI チャットアプリケーション」のバックエンド API サーバーです。
 
-単なるプロトタイプにとどまらず、実務で耐えうる **「疎結合」「高テスタビリティ」「コンパイル時 DI（Google Wire）」** を備えたレイヤードアーキテクチャを採用しています。
+実務で耐えうる **「ドメイン凝集」「疎結合（DIP）」「高テスタビリティ」「コンパイル時 DI（Google Wire）」** を備えたアーキテクチャを採用しています。
 
 ---
 
@@ -12,89 +12,60 @@
 - [2. システムアーキテクチャ & データフロー](#2-システムアーキテクチャ--データフロー)
 - [3. ディレクトリ構成](#3-ディレクトリ構成)
 - [4. これまでの設計判断と進化のプロセス（ADR）](#4-これまでの設計判断と進化のプロセスadr)
-  - [4.1. Clerk SDK の依存をミドルウェアに隔離（防腐層の導入）](#41-clerk-sdk-の依存をミドルウェアに隔離防腐層の導入)
-  - [4.2. Gin Context と `internal/auth` による型安全な認証受け渡し](#42-gin-context-と-internalauth-による型安全な認証受け渡し)
-  - [4.3. Google Wire の導入（手動DIからの脱却）](#43-google-wire-の導入手動diからの脱却)
-  - [4.4. Handler と Service の明確な責務分離](#44-handler-と-service-の明確な責務分離)
-  - [4.5. Wire 定義ファイル名を `wire.go` に統一](#45-wire-定義ファイル名を-wirego-に統一)
-  - [4.6. Clerk を SSoT とするチャットデータモデリング（Webhook同期の排除）](#46-clerk-を-ssot-とするチャットデータモデリングwebhook同期の排除)
-- [5. 今後の運用・拡張構想（GORM + Supabase + GoAI）](#5-今後の運用拡張構想gorm--supabase--goai)
-- [6. ローカル開発環境のセットアップ](#6-ローカル開発環境のセットアップ)
+- [5. ローカル開発環境のセットアップ](#5-ローカル開発環境のセットアップ)
+- [6. テスト・運用コマンド集](#6-テスト運用コマンド集)
 
 ---
 
 ## 1. 技術スタック
 
-| カテゴリ                 | 採用技術                                                    | バージョン / 用途                                               |
-| :----------------------- | :---------------------------------------------------------- | :-------------------------------------------------------------- |
-| **Language**             | [Go](https://go.dev/)                                       | 1.25                                                            |
-| **Web Framework**        | [Gin](https://github.com/gin-gonic/gin)                     | v1.11.0 (高速な HTTP ルーティング)                              |
-| **Authentication**       | [Clerk Go SDK](https://github.com/clerk/clerk-sdk-go/v2)    | v2.7.0 (JWT 検証・セッション管理)                               |
-| **ORM / Database**       | [GORM](https://gorm.io/) / PostgreSQL                       | v1.31.2 / Postgres 16 (AutoMigrate, コネクションプール)         |
-| **Dependency Injection** | [Google Wire](https://github.com/google/wire)               | v0.7.0 (コンパイル時コード生成型 DI)                            |
-| **API Documentation**    | [swaggo/gin-swagger](https://github.com/swaggo/gin-swagger) | v1.6.1 / swag v1.16.4 (OpenAPI / Swagger UI 対話型ドキュメント) |
-| **Live Reload**          | [Air](https://github.com/air-verse/air)                     | v1.63.4 (コンテナ内ホットリロード)                              |
-| **Container**            | Docker / Docker Compose                                     | PostgreSQL 16 + Go API + Nginx Web (仮フロントエンド)           |
-| **Future Extensions**    | Supabase (本番 DB 移行)                                     | PostgreSQL 互換接続                                             |
-|                          | Google Gen AI SDK (Go)                                      | AI チャット返答生成エンジン                                     |
+| カテゴリ                 | 採用技術                                                    | バージョン / 用途                             |
+| :----------------------- | :---------------------------------------------------------- | :-------------------------------------------- |
+| **Language**             | [Go](https://go.dev/)                                       | 1.26 (Alpine コンテナ)                        |
+| **Web Framework**        | [Gin](https://github.com/gin-gonic/gin)                     | v1.12.0 (ルーティング・SSE ストリーミング)    |
+| **Authentication**       | [Clerk Go SDK](https://github.com/clerk/clerk-sdk-go/v2)    | v2.7.0 (JWT 検証・セッション管理)             |
+| **ORM / Database**       | [GORM](https://gorm.io/) / PostgreSQL                       | v1.31.2 / Postgres 16 (コネクションプール)    |
+| **Migration**            | [golang-migrate](https://github.com/golang-migrate/migrate) | v4.18.3 (SQL マイグレーション)                |
+| **AI Client**            | [GoAI](https://github.com/zendev-sh/goai)                   | v0.10.2 (マルチプロバイダ SDK)                |
+| **Encryption**           | Standard crypto/cipher                                      | AES-256-GCM (ユーザー API キーの可逆暗号化)   |
+| **Dependency Injection** | [Google Wire](https://github.com/google/wire)               | v0.7.0 (コンパイル時コード生成型 DI)          |
+| **API Documentation**    | [swaggo/gin-swagger](https://github.com/swaggo/gin-swagger) | v1.6.1 / swag v1.16.4 (Swagger UI)            |
+| **Live Reload**          | [Air](https://github.com/air-verse/air)                     | v1.63.4 (コンテナ内ホットリロード)            |
+| **Container**            | Docker / Docker Compose                                     | PostgreSQL 16 + Go API + Nginx Web (テストUI) |
 
 ---
 
 ## 2. システムアーキテクチャ & データフロー
 
-### レイヤードアーキテクチャ
+システムはドメイン駆動・機能別（Package by Feature）に基づき、以下の階層構造で構成されています。
 
-システムは関心の分離（Separation of Concerns）に基づき、以下の階層構造で構成されています。
-
-````mermaid
+```mermaid
 graph TD
-    Client["クライアント (Web/Browser)"] -->|HTTP Request| Router["Router (routes.go)"]
+    Client["クライアント (Web / Swagger UI)"] -->|HTTP / SSE| Router["Router (routes.go)"]
     Router -->|Authorization Header| Middleware["Middleware (clerk.go)"]
 
-    subgraph "Anti-Corruption Layer (防腐層)"
-        Middleware -->|JWT検証| ClerkSDK["Clerk SDK"]
+    subgraph "防腐層 (ACL) & 認証"
+        Middleware -->|JWT検証| ClerkSDK["Clerk Go SDK"]
         Middleware -->|User ID抽出| AuthCtx["internal/auth (Context操作)"]
     end
 
-    Middleware -->|c.Next| Handler["Handler (user.go / chat.go / health.go)"]
-    Handler -->|MustGetUserID| AuthCtx
-    Handler -->|ビジネス処理要求| Service["Service (user.go / chat.go)"]
-    Service -->|データ永続化要求| Repository["Repository (chat.go)"]
-    Repository -->|SQL/GORM実行| DBClient["*gorm.DB (コネクションプール)"]
-    DBClient -->|TCP接続| Database[("PostgreSQL 16 / Supabase")]
+    Middleware -->|c.Next| Handlers["Domain Handlers (chat / apikey / profile / aimodel / health)"]
+    Handlers -->|MustGetUserID| AuthCtx
+    Handlers -->|業務処理要求| Services["Domain Services"]
 
-    Wire["Google Wire (wire.go / wire_gen.go)"] -.->|依存性を自動注入| DBClient
-    Wire -.->|依存性を自動注入| Repository
-    Wire -.->|依存性を自動注入| Service
-
-### リクエスト処理シーケンス（`/api/v1/me` の例）
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as クライアント
-    participant Router as router
-    participant MW as middleware.clerk
-    participant Clerk as Clerk SDK
-    participant Auth as internal/auth
-    participant Handler as handler.user
-    participant Service as service.user
-
-    Client->>Router: GET /api/v1/me (Bearer Token)
-    Router->>MW: ClerkAuthMiddleware
-    MW->>Clerk: トークン検証 (RequireHeaderAuthorization)
-    alt 未認証 / 不正トークン
-        MW-->>Client: 401 Unauthorized / 403 Forbidden (c.Abort)
-    else 認証成功
-        MW->>Auth: SetUserID(c, claims.Subject)
-        MW->>Handler: c.Next() -> GetMe(c)
-        Handler->>Auth: MustGetUserID(c)
-        Auth-->>Handler: userID (string)
-        Handler->>Service: GetProfile(ctx, userID)
-        Service-->>Handler: UserProfile { user_id, plan, status }
-        Handler-->>Client: 200 OK (JSON)
+    subgraph "ドメイン層 (インターフェース駆動)"
+        Services -->|抽象インターフェース経由| Repositories["Domain Repositories"]
+        Services -->|抽象インターフェース経由| Infra["Infra Clients (GoAI / Crypto / DB)"]
     end
-````
+
+    Repositories -->|SQL実行| DBClient["*gorm.DB (コネクションプール)"]
+    DBClient -->|TCP接続| Database[("PostgreSQL 16")]
+    Infra -->|HTTPS| AIProviders["AI 各社 API (OpenRouter / OpenAI / Anthropic / Google)"]
+
+    Wire["Google Wire"] -.->|依存性を自動注入| Handlers
+    Wire -.->|依存性を自動注入| Services
+    Wire -.->|依存性を自動注入| Repositories
+```
 
 ---
 
@@ -102,216 +73,147 @@ sequenceDiagram
 
 ```
 study-gin-clerk/
-  ├── Dockerfile                    # Go 1.26.7 + Air + Wire CLI + golang-migrate
-  ├── compose.yaml                  # Docker Compose 定義 (Go API + PostgreSQL 16)
+  ├── Dockerfile                    # Go 1.26 + Air + Wire + Swag + golang-migrate
+  ├── compose.yaml                  # Docker Compose 定義 (Go API + PostgreSQL 16 + Web Nginx)
   ├── .air.toml                     # ホットリロード設定
   ├── wire-manual.md                # Google Wire 運用マニュアル
-  ├── migrations/                   # golang-migrate SQL マイグレーションファイル
+  ├── migrations/                   # golang-migrate SQL マイグレーション
   │    ├── 000001_create_initial_tables.up.sql / down.sql
   │    └── 000002_add_system_prompt.up.sql / down.sql
   ├── cmd/
   │    └── api/
-  │         ├── main.go             # エントリポイント (InitializeApp の実行と HTTP サーバ起動)
-  │         ├── wire.go             # Wire 設計図 (Injector 宣言)
-  │         └── wire_gen.go         # Wire が自動生成した初期化コード
-  ├── docs/                         # Swagger / OpenAPI 自動生成ドキュメント (docs.go, swagger.json, swagger.yaml)
+  │         ├── main.go             # エントリポイント (Graceful Shutdown & InitializeApp 実行)
+  │         ├── wire.go             # Wire Injector 宣言
+  │         └── wire_gen.go         # Wire 自動生成コード
+  ├── docs/                         # Swagger 自動生成ドキュメント (docs.go, swagger.json, swagger.yaml)
   ├── internal/
-  │    ├── auth/
-  │    │    └── user.go             # 認証コンテキスト操作 (SetUserID, MustGetUserID)
-  │    ├── config/
-  │    │    └── env.go              # 環境変数読み込み・バリデーション (DB DSN, AES鍵)
-  │    ├── handler/
-  │    │    ├── wire.go             # handler.Set (Handler 層の DI 定義)
-  │    │    ├── ai.go               # モデル一覧 API
-  │    │    ├── chat.go             # チャット・ストリーミング API
-  │    │    ├── health.go           # ヘルスチェック API
-  │    │    ├── user.go             # ユーザー関連 API
-  │    │    └── user_api_key.go     # ユーザー API キー管理 API
-  │    ├── middleware/
-  │    │    └── clerk.go            # Clerk 認証ミドルウェア (防腐層)
-  │    ├── model/
-  │    │    ├── api_key.go          # API キーモデル
-  │    │    ├── chat.go             # チャット・メッセージモデル
-  │    │    └── user_profile.go     # ユーザープロファイル・プロンプトモデル
-  │    ├── router/
-  │    │    ├── wire.go             # router.Set (Router 層の DI 定義)
-  │    │    └── routes.go           # エンドポイントのルーティング定義
-  │    ├── service/
-  │    │    ├── wire.go             # service.Set (Service 層の DI 定義)
-  │    │    ├── chat.go             # チャット業務ロジック (AI返答・ストリーミング)
-  │    │    ├── user.go             # ユーザー・プロンプト業務ロジック
-  │    │    └── user_api_key.go     # API キー暗号化・モデル取得ロジック
-  │    └── infra/                   # 【インフラ層】外部依存・低レベル技術を集約
-  │         ├── ai/                 # GoAI SDK クライアント, Registry, Cache
-  │         ├── crypto/             # AES-256-GCM 暗号化 / 復号化ユーティリティ
-  │         ├── db/                 # GORM 接続・プール設定
-  │         └── repository/         # PostgreSQL データアクセス (CRUD)
+  │    ├── auth/                    # 認証コンテキスト操作 (SetUserID, GetUserID, MustGetUserID)
+  │    ├── config/                  # 環境変数読み込み・バリデーション (CORS, AES鍵, DSN)
+  │    ├── middleware/              # Clerk 認証ミドルウェア (防腐層)
+  │    ├── router/                  # ルーティング設定・CORS・Swagger エンドポイント
+  │    ├── types/                   # 共通ドメイン値オブジェクト (Provider, AIModel)
+  │    ├── apikey/                  # 【APIキー管理ドメイン】(AES暗号化, バリデーション, 登録)
+  │    ├── chat/                    # 【チャットドメイン】(会話履歴, SSEストリーミング, AI返答)
+  │    ├── profile/                 # 【プロファイルドメイン】(システムプロンプト設定)
+  │    ├── aimodel/                 # 【AIモデルドメイン】(利用可能モデル動的取得・一覧)
+  │    ├── health/                  # 【ヘルスチェック】(DB Ping 疎通確認)
+  │    └── infra/                   # 【インフラ層】
+  │         ├── ai/                 # GoAI クライアント, プロバイダ別 Fetcher (Strategy), MemoryCache
+  │         ├── crypto/             # AES-256-GCM 暗号化 / 復号化
+  │         └── db/                 # GORM 接続・コネクションプール管理
   └── web/
-       ├── nginx.conf               # 仮フロントエンド配信用 Nginx 設定 (リバースプロキシ & 動的環境変数配信)
-       └── index.html               # 動作検証用フロントエンド (Clerk JS 連携 & Swagger UI 埋め込み)
+       ├── nginx.conf               # 仮フロントエンド配信 Nginx 設定 (動的環境変数配信)
+       └── index.html               # 動作検証用フロントエンド (Clerk JS 連携 & SSE チャット UI)
 ```
 
 ---
 
 ## 4. これまでの設計判断と進化のプロセス（ADR）
 
-本プロジェクトは初期の単純な実装から、設計上の議論を経て現在のアーキテクチャへと進化しました。その意思決定プロセスを記録します。
+### 4.1. レイヤード構成からドメイン別（Package by Feature）への移行
 
-### 4.1. Clerk SDK の依存をミドルウェアに隔離（防腐層の導入）
+- **背景**: 初期の「handler/」「service/」「model/」による水平分割は、機能追加時に複数のフォルダを行き来する必要があり、依存関係が乱雑になりやすかった。
+- **解決策**: 機能単位（`chat`, `apikey`, `profile`, `aimodel`）でパッケージを独立化。各パッケージ内で Model, Repository, Service, Handler, Wire を完結させた。
 
-- **初期の課題**:
-  各ハンドラーが `github.com/clerk/clerk-sdk-go/v2` をインポートし、`clerk.SessionClaimsFromContext` を直接呼び出していた。この設計では、認証プロバイダのコードがアプリ全体に散らばり、将来の認証切り替えやハンドラーのテストが困難になっていた。
-- **解決策**:
-  Clerk SDK の呼び出しを [`internal/middleware/clerk.go`](file:///home/naomi/prog/test/study-gin-clerk/internal/middleware/clerk.go) の中に完全にカプセル化。認証通過時にユーザー ID（`claims.Subject`）を取り出し、アプリ内部のコンテキストに変換して流す「防腐層（Anti-Corruption Layer）」を構築した。
-- **効果**:
-  Handler や Service 層から外部認証ベンダーへの依存が完全に排除され、疎結合を実現。
+### 4.2. 依存関係逆転の原則（DIP）とインターフェース駆動設計
 
-### 4.2. Gin Context と `internal/auth` による型安全な認証受け渡し
+- **背景**: サービス層が暗号化ユーティリティや AI クライアント、外部 API レジストリの具象型に直接依存しており、単体テストが困難だった。
+- **解決策**: 呼び出し側（Consumer-driven）で必要最小限のインターフェース（`KeyValidator`, `CacheInvalidator`, `Encryptor`, `ChatClient`, `ChatRepository` 等）を定義。モックを使用した単体テストを完備した。
 
-- **議論のポイント**:
-  「ミドルウェアで取れたなら、ハンドラーの引数に直接 `userID` を渡せないのか？」
-- **背景と仕様制約**:
-  Gin のルーターシグネチャは `func(*gin.Context)` で固定されているため、引数追加は不可。値の受け渡しはコンテキスト経由（`c.Set` / `c.Get`）で行う必要がある。
-- **解決策**:
-  文字列キー（`"user_id"`）のタイポや `any` からの型キャスト失敗を防ぐため、専用の [`internal/auth`](file:///home/naomi/prog/test/study-gin-clerk/internal/auth/user.go) パッケージを定義。
-  - `auth.SetUserID(c, userID)`
-  - `auth.MustGetUserID(c)`
-    ハンドラー側では未認証チェックの二重分岐を書く必要がなくなり、1行で安全に取得可能とした。
+### 4.3. Clerk SDK の依存をミドルウェアに隔離（防腐層の導入）
 
-### 4.3. Google Wire の導入（手動DIからの脱却）
+- Clerk SDK の呼び出しを [`internal/middleware/clerk.go`](file:///home/naomi/prog/test/study-gin-clerk/internal/middleware/clerk.go) にカプセル化。後続のハンドラーやドメイン層は純粋な `user_id`（string）のみを扱う。
 
-- **将来課題の予見**:
-  将来「GORM（DB）」や「Go AI」が追加された際、`main.go` での依存関係組み立て（手動 DI）がパズル状態になり、`main.go` が肥大化するリスクがあった。
-- **解決策**:
-  Google 公式のコンパイル時 DI ツール **Google Wire** を初期段階で導入。
-  - リフレクションを使わないため実行時パフォーマンスオーバーヘッドがゼロ。
-  - 依存解決の失敗はビルド前に検知可能。
-  - `main.go` は `InitializeApp()` を呼ぶだけのシンプルな状態を維持できる。
+### 4.4. `APP_URL` と `CORS_ALLOWED_ORIGINS` の責務分離
 
-### 4.4. Handler と Service の明確な責務分離
-
-- **理由と役割**:
-  - **Handler**: Web（HTTP / Gin）の通訳係。JSON のバインド、ステータスコードの返却、HTTP ヘッダーの処理に専念する。
-  - **Service**: 純粋な業務ルール（ビジネスロジック）の実行係。Gin には一切依存せず、標準の `context.Context` とプリミティブ型で動作する。
-- **効果**:
-  将来「会話履歴の取得 → 利用制限判定 → AI プロンプト生成 → 返答保存」という一連の AI チャット業務フローを実装する際、Web 通信の都合と業務ルールが混ざらず、単体テストが極めて書きやすい構造となった。
-
-### 4.5. Wire 定義ファイル名を `wire.go` に統一
-
-- **可読性の向上**:
-  各パッケージ内に `wire.go` を配置（`handler/wire.go`, `service/wire.go`, `router/wire.go`, `repository/wire.go`, `db/wire.go`）。「Wire への登録情報は各フォルダの `wire.go` を見ればすべて分かる」という統一ルールを確立した。
-
-### 4.6. Clerk を SSoT とするチャットデータモデリング（Webhook同期の排除）
-
-- **設計判断**:
-  ユーザープロファイル情報を Webhook で DB に複製同期する構成は取らず、Clerk を **SSoT（信頼できる唯一の情報源）** として扱う方針を決定。データベースには `users` テーブルを作らず、`chats` テーブルの `user_id` カラムに Clerk ID を直接保持する。
-- **効果**:
-  Webhook サーバーの運用や署名検証、同期遅延・不整合のリスクを完全に排除。すべてのクエリに `WHERE user_id = ?` を適用することで、シンプルかつセキュアなマルチテナント分離を実現した。
+- 自アプリの代表 URL（OpenRouter の `HTTP-Referer` ヘッダー等）と、CORS 許可オリジン一覧（カンマ区切り）を明確に分離。誤設定による不正な HTTP ヘッダー送信バグを防止。
 
 ---
 
-## 5. 今後の運用・拡張構想（GORM + Supabase + GoAI）
-
-本番の「AIチャットアプリ」へ向けた拡張ロードマップです。
-
-```
-[クライアント]
-      │ POST /api/v1/chat/messages
-      ▼
-[ChatHandler]  (JSONパース & userID取得)
-      │ SendMessage(ctx, userID, message)
-      ▼
-[ChatService]  (業務フローの統括)
-      ├──> [RateLimiter]       (送信上限チェック)
-      ├──> [ChatRepository]    (過去履歴を Supabase / GORM から取得)
-      ├──> [Go AI Client]      (Gemini / OpenAI にプロンプト送信)
-      └──> [ChatRepository]    (ユーザー発話 & AI応答を DB に永続化)
-```
-
-### 拡張ステップ
-
-1. **インフラ層の追加 (`internal/infra`)**:
-   - GORM による Supabase PostgreSQL への接続 Provider（`NewGormDB`）
-   - Go AI クライアントの初期化 Provider（`NewAIClient`）
-2. **Repository 層の追加 (`internal/repository`)**:
-   - `ChatRepository`（会話セッション・メッセージの保存・取得）
-3. **Service 層の拡張 (`internal/service`)**:
-   - `ChatService`（履歴付きチャット生成のオーケストレーション）
-4. **Wire による自動結合**:
-   - 新しいパッケージの `wire.go` を `cmd/api/wire.go` に追加し、`wire gen` を実行するだけで全自動配線。
-
-詳しい追加手順は [`wire-manual.md`](file:///home/naomi/prog/test/study-gin-clerk/wire-manual.md) を参照してください。
-
----
-
-## 6. ローカル開発環境のセットアップ
+## 5. ローカル開発環境のセットアップ
 
 ### 前提条件
 
-- Docker & Docker Compose がインストールされていること
-- [Clerk](https://clerk.com/) のアカウントおよび API キーがあること
+- Docker & Docker Compose
+- [Clerk](https://clerk.com/) アカウント（API Keys）
 
 ### 1. 環境変数の準備
 
-プロジェクト直下に `.env` を作成します。
+プロジェクト直下に `.env` を作成します：
 
 ```env
 PORT=8080
+APP_URL=http://localhost:3000
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+
 CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxx
 CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxx
 
-# データベース接続 (Supabase などの場合は DATABASE_URL 1本での指定も可能)
-# DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require
-DB_HOST=db
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=password
-DB_NAME=study_app
-DB_SSLMODE=disable
+DATABASE_URL=postgres://postgres:password@db:5432/study_app?sslmode=disable
+
+# AES-256-GCM 暗号化マスターキー (32バイト / 64文字の16進数文字列)
+ENCRYPTION_KEY=03eb48bf7ba4f88a8bc7f269a114cd5b71c89aeb086dec25f6f58e5c09e3303f
 ```
 
-### 2. コンテナのビルドと起動
+### 2. コンテナの起動
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
-- Air による API ホットリロードが有効化されています。
-- Nginx（ポート 3000）により仮フロントエンドが配信され、`.env` の `CLERK_PUBLISHABLE_KEY` が動的注入されます。
+### 3. DB マイグレーションの実行
 
-### 3. Wire コードの再生成（開発時）
+```bash
+docker compose exec api migrate -path migrations -database "postgres://postgres:password@db:5432/study_app?sslmode=disable" up
+```
 
-ハンドラーやサービスのコンストラクタを変更・追加した場合は、コンテナ内で以下を実行します：
+### 4. 動作確認
+
+- **動作検証用 Web UI**: `http://localhost:3000/` (Clerk ログイン・APIキー登録・SSE チャット送受信)
+- **Swagger UI**: `http://localhost:8080/swagger/index.html`
+- **Health Check**: `curl http://localhost:8080/health`
+  ```json
+  {
+    "status": "ok",
+    "database": "connected"
+  }
+  ```
+
+---
+
+## 6. テスト・運用コマンド集
+
+すべてのコマンドは **`api` コンテナ内** で実行します。
+
+### 単体テストの実行
+
+```bash
+docker compose exec api go test -v ./...
+```
+
+### Wire コードの再生成
+
+コンストラクタや依存関係を変更した際：
 
 ```bash
 docker compose exec api wire gen ./cmd/api
+docker compose exec api wire check ./cmd/api
 ```
 
-### 4. Swagger ドキュメントの再生成（APIコメント変更・追加時）
+### Swagger ドキュメントの再生成
 
-ハンドラーのアノテーション（`@Router` や `@Param` 等）を変更した場合は、コンテナ内で以下を実行してドキュメントを更新します：
+API コメントを変更した際：
 
 ```bash
 docker compose exec api swag init -g cmd/api/main.go -o docs
 ```
 
-### 5. 動作確認
+### DB マイグレーション操作
 
-- **Web UI & API Explorer (仮フロントエンド)**: `http://localhost:3000/`
-  - Clerk ログインを行うと、24時間有効な JWT が自動取得され、埋め込み Swagger UI に自動で Bearer 認証がセットされます。
-- **Swagger UI (単体アクセス)**: `http://localhost:8080/swagger/index.html`
-- **Health Check**: `curl http://localhost:8080/health`
-  ```json
-  { "status": "ok" }
-  ```
-- **Me API (認証必須)**:
-  ```bash
-  curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" http://localhost:8080/api/v1/me
-  ```
-  ```json
-  {
-    "user_id": "user_xxxxxxxx",
-    "plan": "free",
-    "status": "active"
-  }
-  ```
+```bash
+# マイグレーション適用
+docker compose exec api migrate -path migrations -database "$DATABASE_URL" up
+
+# ロールバック (1ステップ)
+docker compose exec api migrate -path migrations -database "$DATABASE_URL" down 1
+```

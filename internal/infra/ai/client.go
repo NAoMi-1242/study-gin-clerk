@@ -23,6 +23,25 @@ type ChatMessage struct {
 	Content string
 }
 
+// ChatClient defines text generation and streaming capabilities for AI chat.
+type ChatClient interface {
+	GenerateReply(
+		ctx context.Context,
+		providerName types.Provider,
+		modelID, apiKey, systemPrompt string,
+		history []ChatMessage,
+		prompt string,
+	) (string, error)
+
+	StreamReply(
+		ctx context.Context,
+		providerName types.Provider,
+		modelID, apiKey, systemPrompt string,
+		history []ChatMessage,
+		prompt string,
+	) (*goai.TextStream, error)
+}
+
 type Client struct {
 	cfg config.Config
 }

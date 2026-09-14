@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"study-gin-clerk/internal/apikey"
 	"study-gin-clerk/internal/auth"
 	"study-gin-clerk/internal/types"
 )
@@ -277,7 +276,7 @@ func handleChatError(c *gin.Context, err error, userID string, chatID uint) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
 		return
 	}
-	if errors.Is(err, apikey.ErrNotRegistered) || errors.Is(err, ErrValidationFailed) {
+	if errors.Is(err, ErrAPIKeyNotConfigured) || errors.Is(err, ErrValidationFailed) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

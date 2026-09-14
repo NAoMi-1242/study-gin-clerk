@@ -10,18 +10,22 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"study-gin-clerk/internal/config"
 )
+
+// Cipher defines standard encryption and decryption capabilities.
+type Cipher interface {
+	Encrypt(plainText string) (string, error)
+	Decrypt(cipherTextBase64 string) (string, error)
+}
 
 // AESCipher provides AES-256-GCM encryption and decryption with a pre-parsed key.
 type AESCipher struct {
 	keyBytes []byte
 }
 
-// NewAESCipher creates a new AESCipher from configuration, validating and caching the 32-byte key.
-func NewAESCipher(cfg config.Config) (*AESCipher, error) {
-	keyBytes, err := parseKey(cfg.EncryptionKey)
+// NewAESCipher creates a new AESCipher, validating and caching the 32-byte key.
+func NewAESCipher(encryptionKey string) (*AESCipher, error) {
+	keyBytes, err := parseKey(encryptionKey)
 	if err != nil {
 		return nil, err
 	}

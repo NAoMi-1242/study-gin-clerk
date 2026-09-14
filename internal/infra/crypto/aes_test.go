@@ -2,8 +2,6 @@ package crypto
 
 import (
 	"testing"
-
-	"study-gin-clerk/internal/config"
 )
 
 func TestAESCipher_EncryptDecrypt(t *testing.T) {
@@ -36,8 +34,7 @@ func TestAESCipher_EncryptDecrypt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := config.Config{EncryptionKey: tt.key}
-			cipher, err := NewAESCipher(cfg)
+			cipher, err := NewAESCipher(tt.key)
 			if err != nil {
 				t.Fatalf("failed to create AESCipher: %v", err)
 			}
@@ -71,8 +68,7 @@ func TestAESCipher_InvalidKey(t *testing.T) {
 	}
 
 	for _, key := range invalidKeys {
-		cfg := config.Config{EncryptionKey: key}
-		_, err := NewAESCipher(cfg)
+		_, err := NewAESCipher(key)
 		if err == nil {
 			t.Errorf("expected error for invalid key %q, got nil", key)
 		}
@@ -80,8 +76,7 @@ func TestAESCipher_InvalidKey(t *testing.T) {
 }
 
 func TestAESCipher_DecryptCorrupted(t *testing.T) {
-	cfg := config.Config{EncryptionKey: "12345678901234567890123456789012"}
-	cipher, err := NewAESCipher(cfg)
+	cipher, err := NewAESCipher("12345678901234567890123456789012")
 	if err != nil {
 		t.Fatalf("failed to create AESCipher: %v", err)
 	}

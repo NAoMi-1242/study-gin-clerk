@@ -34,15 +34,15 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 	apikeyRepository := apikey.NewRepository(gormDB)
 	modelRegistry := ai.NewModelRegistry()
 	memoryCache, cleanup2 := ai.NewMemoryCacheDefault()
-	aesCipher, err := crypto.NewAESCipher(cfg)
+	aesCipher, err := crypto.ProvideCipher(cfg)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	apikeyService := apikey.NewService(apikeyRepository, modelRegistry, memoryCache, aesCipher)
+	apikeyService := apikey.ProvideService(apikeyRepository, modelRegistry, memoryCache, aesCipher)
 	apikeyHandler := apikey.NewHandler(apikeyService)
-	aimodelService := aimodel.NewService(apikeyService, modelRegistry, memoryCache)
+	aimodelService := aimodel.ProvideService(apikeyService, modelRegistry, memoryCache)
 	aimodelHandler := aimodel.NewHandler(aimodelService)
 	chatRepository := chat.NewRepository(gormDB)
 	client := ai.NewClient(cfg)

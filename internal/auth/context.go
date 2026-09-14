@@ -4,6 +4,7 @@ import "github.com/gin-gonic/gin"
 
 const userIDKey = "user_id"
 
+// SetUserID sets the authenticated user ID into the Gin context.
 func SetUserID(c *gin.Context, userID string) {
 	c.Set(userIDKey, userID)
 }
@@ -32,3 +33,4 @@ func MustGetUserID(c *gin.Context) string {
 
 	return userID
 }
+

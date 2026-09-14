@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/zendev-sh/goai"
 
@@ -22,6 +23,34 @@ type ProfileProvider interface {
 	GetProfile(ctx context.Context, userID string) (*profile.Profile, error)
 }
 
+// ChatRepository defines the storage interface for chats and messages.
+type ChatRepository interface {
+	Create(ctx context.Context, userID, title string) (*Chat, error)
+	ListByUserID(ctx context.Context, userID string) ([]Chat, error)
+	GetWithMessages(ctx context.Context, chatID uint, userID string) (*Chat, error)
+	CreateMessage(ctx context.Context, chatID uint, role Role, content string) (*Message, error)
+	CreateMessagePair(ctx context.Context, chatID uint, userContent, aiContent string) (*Message, *Message, error)
+}
+
+// ChatClient defines text generation and streaming capabilities for AI chat.
+type ChatClient interface {
+	GenerateReply(
+		ctx context.Context,
+		providerName types.Provider,
+		modelID, apiKey, systemPrompt string,
+		history []ai.ChatMessage,
+		prompt string,
+	) (string, error)
+
+	StreamReply(
+		ctx context.Context,
+		providerName types.Provider,
+		modelID, apiKey, systemPrompt string,
+		history []ai.ChatMessage,
+		prompt string,
+	) (*goai.TextStream, error)
+}
+
 // StreamMessageResult holds the stream instance and message persistence hook.
 type StreamMessageResult struct {
 	UserMessage *Message
@@ -30,16 +59,16 @@ type StreamMessageResult struct {
 }
 
 type Service struct {
-	repo            *Repository
+	repo            ChatRepository
 	keyProvider     KeyProvider
-	aiClient        *ai.Client
+	aiClient        ChatClient
 	profileProvider ProfileProvider
 }
 
 func NewService(
-	repo *Repository,
+	repo ChatRepository,
 	keyProvider KeyProvider,
-	aiClient *ai.Client,
+	aiClient ChatClient,
 	profileProvider ProfileProvider,
 ) *Service {
 	return &Service{
@@ -98,7 +127,7 @@ func (s *Service) prepareSession(
 	// 2. ユーザーの API キーを復号して取得
 	apiKey, err := s.keyProvider.GetDecryptedKey(ctx, userID, providerName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrAPIKeyNotConfigured, err)
 	}
 
 	// 3. ユーザーの最新システムプロンプトを取得 (動的適用)
@@ -211,9 +240,11 @@ func (s *Service) StreamMessage(
 		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
-	// ストリーム完了時に呼び出す DB 保存コールバック
+	// ストリーム完了時に呼び出す DB 保存コールバック (10秒の安全なタイムアウト付き)
 	onComplete := func(fullText string) (*Message, error) {
-		return s.repo.CreateMessage(context.Background(), chatID, RoleAssistant, fullText)
+		saveCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return s.repo.CreateMessage(saveCtx, chatID, RoleAssistant, fullText)
 	}
 
 	return &StreamMessageResult{

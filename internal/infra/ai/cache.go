@@ -13,12 +13,23 @@ type cacheItem struct {
 	expiresAt time.Time
 }
 
-// MemoryCache provides thread-safe in-memory caching for model lists partitioned by (userID, provider).
+// ModelCacher provides caching interface for model lists partitioned by (userID, provider).
+type ModelCacher interface {
+	Get(userID string, provider types.Provider) ([]types.AIModel, bool)
+	Set(userID string, provider types.Provider, models []types.AIModel)
+	Purge(userID string, provider types.Provider)
+	PurgeUser(userID string)
+}
+
+const defaultMaxCacheItems = 1000
+
+// MemoryCache provides thread-safe bounded in-memory caching for model lists partitioned by (userID, provider).
 type MemoryCache struct {
-	mu     sync.RWMutex
-	items  map[string]cacheItem
-	ttl    time.Duration
-	stopCh chan struct{}
+	mu       sync.RWMutex
+	items    map[string]cacheItem
+	ttl      time.Duration
+	maxItems int
+	stopCh   chan struct{}
 }
 
 // NewMemoryCache creates a new MemoryCache with the specified TTL.
@@ -27,9 +38,10 @@ func NewMemoryCache(ttl time.Duration) *MemoryCache {
 		ttl = 15 * time.Minute
 	}
 	c := &MemoryCache{
-		items:  make(map[string]cacheItem),
-		ttl:    ttl,
-		stopCh: make(chan struct{}),
+		items:    make(map[string]cacheItem),
+		ttl:      ttl,
+		maxItems: defaultMaxCacheItems,
+		stopCh:   make(chan struct{}),
 	}
 
 	// Periodic cleanup of expired items every 10 minutes
@@ -71,10 +83,27 @@ func (c *MemoryCache) Get(userID string, provider types.Provider) ([]types.AIMod
 	return result, true
 }
 
-// Set stores models for a specific user and provider with TTL.
+// Set stores models for a specific user and provider with TTL, respecting max capacity.
 func (c *MemoryCache) Set(userID string, provider types.Provider, models []types.AIModel) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// If capacity reached, do an immediate eviction of expired items
+	if len(c.items) >= c.maxItems {
+		now := time.Now()
+		for k, v := range c.items {
+			if now.After(v.expiresAt) {
+				delete(c.items, k)
+			}
+		}
+		// If still at capacity, evict any single arbitrary item to maintain boundary
+		if len(c.items) >= c.maxItems {
+			for k := range c.items {
+				delete(c.items, k)
+				break
+			}
+		}
+	}
 
 	key := userID + ":" + string(provider)
 	c.items[key] = cacheItem{

@@ -6,29 +6,51 @@ import (
 	"fmt"
 	"strings"
 
-	"study-gin-clerk/internal/infra/ai"
-	"study-gin-clerk/internal/infra/crypto"
 	"study-gin-clerk/internal/types"
 )
 
+// KeyValidator verifies whether an API key is valid for the specified AI provider.
+type KeyValidator interface {
+	ValidateKey(ctx context.Context, provider types.Provider, apiKey string) error
+}
+
+// CacheInvalidator handles purging cached data when an API key is modified or deleted.
+type CacheInvalidator interface {
+	Purge(userID string, provider types.Provider)
+}
+
+// Encryptor encrypts and decrypts secret data.
+type Encryptor interface {
+	Encrypt(plainText string) (string, error)
+	Decrypt(cipherTextBase64 string) (string, error)
+}
+
+// KeyRepository defines data access methods for user API keys.
+type KeyRepository interface {
+	Upsert(ctx context.Context, key *Key) error
+	GetByProvider(ctx context.Context, userID string, provider types.Provider) (*Key, error)
+	ListByUserID(ctx context.Context, userID string) ([]Key, error)
+	DeleteByProvider(ctx context.Context, userID string, provider types.Provider) error
+}
+
 type Service struct {
-	repo     *Repository
-	registry *ai.ModelRegistry
-	cache    *ai.MemoryCache
-	cipher   *crypto.AESCipher
+	repo      KeyRepository
+	validator KeyValidator
+	cache     CacheInvalidator
+	cipher    Encryptor
 }
 
 func NewService(
-	repo *Repository,
-	registry *ai.ModelRegistry,
-	cache *ai.MemoryCache,
-	cipher *crypto.AESCipher,
+	repo KeyRepository,
+	validator KeyValidator,
+	cache CacheInvalidator,
+	cipher Encryptor,
 ) *Service {
 	return &Service{
-		repo:     repo,
-		registry: registry,
-		cache:    cache,
-		cipher:   cipher,
+		repo:      repo,
+		validator: validator,
+		cache:     cache,
+		cipher:    cipher,
 	}
 }
 
@@ -44,7 +66,7 @@ func (s *Service) RegisterKey(ctx context.Context, userID string, provider types
 	}
 
 	// 1. Probe the provider API to verify key validity
-	if err := s.registry.ValidateKey(ctx, provider, rawKey); err != nil {
+	if err := s.validator.ValidateKey(ctx, provider, rawKey); err != nil {
 		return nil, fmt.Errorf("%w: API key probe failed for '%s': %v", ErrValidationFailed, provider, err)
 	}
 
@@ -68,7 +90,9 @@ func (s *Service) RegisterKey(ctx context.Context, userID string, provider types
 	}
 
 	// 3. Immediately invalidate/purge any cached models for this user & provider
-	s.cache.Purge(userID, provider)
+	if s.cache != nil {
+		s.cache.Purge(userID, provider)
+	}
 
 	return record, nil
 }
@@ -86,7 +110,9 @@ func (s *Service) DeleteKey(ctx context.Context, userID string, provider types.P
 	if err := s.repo.DeleteByProvider(ctx, userID, provider); err != nil {
 		return err
 	}
-	s.cache.Purge(userID, provider)
+	if s.cache != nil {
+		s.cache.Purge(userID, provider)
+	}
 	return nil
 }
 

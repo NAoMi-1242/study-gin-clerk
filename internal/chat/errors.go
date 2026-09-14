@@ -11,4 +11,7 @@ var (
 
 	// ErrAIProvider indicates an upstream error from an external AI service provider.
 	ErrAIProvider = errors.New("AI provider error")
+
+	// ErrAPIKeyNotConfigured indicates that the user must register an API key before chatting.
+	ErrAPIKeyNotConfigured = errors.New("API key is not registered for this provider")
 )
