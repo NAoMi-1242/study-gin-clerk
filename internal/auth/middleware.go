@@ -1,4 +1,4 @@
-package middleware
+package auth
 
 import (
 	"net/http"
@@ -6,25 +6,20 @@ import (
 	"github.com/clerk/clerk-sdk-go/v2"
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 	"github.com/gin-gonic/gin"
-
-	"study-gin-clerk/internal/auth"
 )
 
-func ClerkAuthMiddleware() gin.HandlerFunc {
+// RequireAuth returns a Gin middleware that validates the Clerk session JWT
+// from the Authorization header and stores the authenticated user ID in the context.
+func RequireAuth() gin.HandlerFunc {
 	clerkMiddleware := clerkhttp.RequireHeaderAuthorization()
 
 	return func(c *gin.Context) {
 		called := false
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			called = true
-			// Clerk middlewareが追加したContextを
-			// GinのRequestにも引き継ぐ。
 			c.Request = r
 
 			claims, ok := clerk.SessionClaimsFromContext(r.Context())
-
-			// 認証済みでuser_idを取得できることを
-			// Handlerに渡す前に保証する。
 			if !ok || claims == nil || claims.Subject == "" {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 					"error": "authentication required",
@@ -32,10 +27,7 @@ func ClerkAuthMiddleware() gin.HandlerFunc {
 				return
 			}
 
-			// Clerk固有の情報からuser_idを取得し、
-			// アプリケーション側の認証情報として保存する。
-			auth.SetUserID(c, claims.Subject)
-
+			SetUserID(c, claims.Subject)
 			c.Next()
 		})
 
@@ -45,3 +37,4 @@ func ClerkAuthMiddleware() gin.HandlerFunc {
 		}
 	}
 }
+

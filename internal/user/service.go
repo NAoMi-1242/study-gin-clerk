@@ -1,4 +1,4 @@
-package apikey
+package user
 
 import (
 	"context"
@@ -25,23 +25,31 @@ type Encryptor interface {
 	Decrypt(cipherTextBase64 string) (string, error)
 }
 
-// KeyRepository defines data access methods for user API keys.
-type KeyRepository interface {
-	Upsert(ctx context.Context, key *Key) error
-	GetByProvider(ctx context.Context, userID string, provider types.Provider) (*Key, error)
-	ListByUserID(ctx context.Context, userID string) ([]Key, error)
-	DeleteByProvider(ctx context.Context, userID string, provider types.Provider) error
+// UserRepository defines data access methods for user profiles and API keys.
+type UserRepository interface {
+	GetProfile(ctx context.Context, userID string) (*Profile, error)
+	UpsertProfile(ctx context.Context, p *Profile) error
+	UpsertKey(ctx context.Context, key *Key) error
+	GetKeyByProvider(ctx context.Context, userID string, provider types.Provider) (*Key, error)
+	ListKeysByUserID(ctx context.Context, userID string) ([]Key, error)
+	DeleteKeyByProvider(ctx context.Context, userID string, provider types.Provider) error
+}
+
+// DecryptedKey represents a user's decrypted API key for a specific provider.
+type DecryptedKey struct {
+	Provider types.Provider
+	RawKey   string
 }
 
 type Service struct {
-	repo      KeyRepository
+	repo      UserRepository
 	validator KeyValidator
 	cache     CacheInvalidator
 	cipher    Encryptor
 }
 
 func NewService(
-	repo KeyRepository,
+	repo UserRepository,
 	validator KeyValidator,
 	cache CacheInvalidator,
 	cipher Encryptor,
@@ -52,6 +60,33 @@ func NewService(
 		cache:     cache,
 		cipher:    cipher,
 	}
+}
+
+// GetProfile retrieves the user's profile and system prompt, returning a default profile if not yet configured.
+func (s *Service) GetProfile(ctx context.Context, userID string) (*Profile, error) {
+	p, err := s.repo.GetProfile(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return &Profile{
+				UserID:       userID,
+				SystemPrompt: "",
+			}, nil
+		}
+		return nil, err
+	}
+	return p, nil
+}
+
+// UpdateSystemPrompt updates and persists the user's shared system prompt.
+func (s *Service) UpdateSystemPrompt(ctx context.Context, userID, systemPrompt string) (*Profile, error) {
+	p := &Profile{
+		UserID:       userID,
+		SystemPrompt: systemPrompt,
+	}
+	if err := s.repo.UpsertProfile(ctx, p); err != nil {
+		return nil, err
+	}
+	return s.repo.GetProfile(ctx, userID)
 }
 
 // RegisterKey validates the key with the provider, encrypts it, saves it in DB, and purges any stale cache.
@@ -85,7 +120,7 @@ func (s *Service) RegisterKey(ctx context.Context, userID string, provider types
 		KeyHint:      keyHint,
 	}
 
-	if err := s.repo.Upsert(ctx, record); err != nil {
+	if err := s.repo.UpsertKey(ctx, record); err != nil {
 		return nil, fmt.Errorf("failed to save API key: %w", err)
 	}
 
@@ -99,7 +134,7 @@ func (s *Service) RegisterKey(ctx context.Context, userID string, provider types
 
 // ListKeys returns all registered API keys for the user (masked hints only).
 func (s *Service) ListKeys(ctx context.Context, userID string) ([]Key, error) {
-	return s.repo.ListByUserID(ctx, userID)
+	return s.repo.ListKeysByUserID(ctx, userID)
 }
 
 // DeleteKey removes an API key and purges the associated cache.
@@ -107,7 +142,7 @@ func (s *Service) DeleteKey(ctx context.Context, userID string, provider types.P
 	if !provider.IsValid() {
 		return fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, provider)
 	}
-	if err := s.repo.DeleteByProvider(ctx, userID, provider); err != nil {
+	if err := s.repo.DeleteKeyByProvider(ctx, userID, provider); err != nil {
 		return err
 	}
 	if s.cache != nil {
@@ -118,7 +153,7 @@ func (s *Service) DeleteKey(ctx context.Context, userID string, provider types.P
 
 // GetDecryptedKey retrieves and decrypts the user's API key for the specified provider.
 func (s *Service) GetDecryptedKey(ctx context.Context, userID string, provider types.Provider) (string, error) {
-	record, err := s.repo.GetByProvider(ctx, userID, provider)
+	record, err := s.repo.GetKeyByProvider(ctx, userID, provider)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return "", fmt.Errorf("%w: provider '%s'", ErrNotRegistered, provider)
@@ -134,15 +169,9 @@ func (s *Service) GetDecryptedKey(ctx context.Context, userID string, provider t
 	return decrypted, nil
 }
 
-// DecryptedKey represents a user's decrypted API key for a specific provider.
-type DecryptedKey struct {
-	Provider types.Provider
-	RawKey   string
-}
-
 // GetDecryptedKeys retrieves and decrypts all registered API keys for the user.
 func (s *Service) GetDecryptedKeys(ctx context.Context, userID string) ([]DecryptedKey, error) {
-	records, err := s.repo.ListByUserID(ctx, userID)
+	records, err := s.repo.ListKeysByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -161,3 +190,4 @@ func (s *Service) GetDecryptedKeys(ctx context.Context, userID string) ([]Decryp
 
 	return keys, nil
 }
+

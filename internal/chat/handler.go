@@ -12,14 +12,54 @@ import (
 
 	"study-gin-clerk/internal/auth"
 	"study-gin-clerk/internal/types"
+	"study-gin-clerk/internal/user"
 )
 
 type Handler struct {
-	service *Service
+	chatService *Service
+	userService *user.Service
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(chatService *Service, userService *user.Service) *Handler {
+	return &Handler{
+		chatService: chatService,
+		userService: userService,
+	}
+}
+
+// ListModels godoc
+// @Summary 利用可能モデル一覧取得 (動的取得 & キャッシュ)
+// @Description 認証済みユーザーが登録した API キーに基づき、プロバイダから動的に取得したモデル一覧を返却します。15分間のインメモリキャッシュ付きです。
+// @Tags ai_models
+// @Security BearerAuth
+// @Produce json
+// @Param refresh query bool false "キャッシュをバイパスして強制再取得するか"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string "未認証"
+// @Failure 500 {object} map[string]string "サーバーエラー"
+// @Router /api/v1/ai/models [get]
+func (h *Handler) ListModels(c *gin.Context) {
+	userID := auth.MustGetUserID(c)
+	refresh := c.Query("refresh") == "true"
+
+	keys, err := h.userService.GetDecryptedKeys(c.Request.Context(), userID)
+	if err != nil {
+		slog.Error("failed to retrieve user keys", "error", err, "user_id", userID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve models"})
+		return
+	}
+
+	models, activeProviders, err := h.chatService.GetAvailableModels(c.Request.Context(), userID, keys, refresh)
+	if err != nil {
+		slog.Error("failed to retrieve models", "error", err, "user_id", userID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve models"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"active_providers": activeProviders,
+		"models":           models,
+	})
 }
 
 type CreateChatRequest struct {
@@ -49,7 +89,7 @@ func (h *Handler) CreateChat(c *gin.Context) {
 		return
 	}
 
-	res, err := h.service.CreateChat(c.Request.Context(), userID, req.Title)
+	res, err := h.chatService.CreateChat(c.Request.Context(), userID, req.Title)
 	if err != nil {
 		slog.Error("failed to create chat", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create chat"})
@@ -73,7 +113,7 @@ func (h *Handler) CreateChat(c *gin.Context) {
 func (h *Handler) ListChats(c *gin.Context) {
 	userID := auth.MustGetUserID(c)
 
-	chats, err := h.service.ListChats(c.Request.Context(), userID)
+	chats, err := h.chatService.ListChats(c.Request.Context(), userID)
 	if err != nil {
 		slog.Error("failed to list chats", "error", err, "user_id", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list chats"})
@@ -105,7 +145,7 @@ func (h *Handler) GetChat(c *gin.Context) {
 		return
 	}
 
-	res, err := h.service.GetChat(c.Request.Context(), chatID, userID)
+	res, err := h.chatService.GetChat(c.Request.Context(), chatID, userID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
@@ -183,7 +223,28 @@ func (h *Handler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	userMsg, aiMsg, err := h.service.SendMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
+	apiKey, err := h.userService.GetDecryptedKey(c.Request.Context(), userID, req.Provider)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "API key is not registered for provider: " + string(req.Provider)})
+		return
+	}
+
+	userProfile, _ := h.userService.GetProfile(c.Request.Context(), userID)
+	systemPrompt := ""
+	if userProfile != nil {
+		systemPrompt = userProfile.SystemPrompt
+	}
+
+	userMsg, aiMsg, err := h.chatService.SendMessage(
+		c.Request.Context(),
+		chatID,
+		userID,
+		req.Content,
+		req.Provider,
+		req.Model,
+		apiKey,
+		systemPrompt,
+	)
 	if err != nil {
 		handleChatError(c, err, userID, chatID)
 		return
@@ -219,7 +280,28 @@ func (h *Handler) StreamMessage(c *gin.Context) {
 		return
 	}
 
-	streamResult, err := h.service.StreamMessage(c.Request.Context(), chatID, userID, req.Content, req.Provider, req.Model)
+	apiKey, err := h.userService.GetDecryptedKey(c.Request.Context(), userID, req.Provider)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "API key is not registered for provider: " + string(req.Provider)})
+		return
+	}
+
+	userProfile, _ := h.userService.GetProfile(c.Request.Context(), userID)
+	systemPrompt := ""
+	if userProfile != nil {
+		systemPrompt = userProfile.SystemPrompt
+	}
+
+	streamResult, err := h.chatService.StreamMessage(
+		c.Request.Context(),
+		chatID,
+		userID,
+		req.Content,
+		req.Provider,
+		req.Model,
+		apiKey,
+		systemPrompt,
+	)
 	if err != nil {
 		handleChatError(c, err, userID, chatID)
 		return
@@ -252,7 +334,7 @@ func (h *Handler) StreamMessage(c *gin.Context) {
 			return
 		}
 		slog.Error("stream error from AI provider", "error", err, "user_id", userID, "chat_id", chatID)
-		c.SSEvent("error", gin.H{"error": "AI generation interrupted"})
+		c.SSEvent("error", gin.H{"error": err.Error()})
 		c.Writer.Flush()
 		return
 	}
@@ -282,7 +364,11 @@ func handleChatError(c *gin.Context, err error, userID string, chatID uint) {
 	}
 	if errors.Is(err, ErrAIProvider) {
 		slog.Error("AI provider error", "error", err, "user_id", userID, "chat_id", chatID)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "AI provider communication failed. Please verify your API key and model settings"})
+		errMsg := err.Error()
+		if trimmed := strings.TrimPrefix(errMsg, ErrAIProvider.Error()+": "); trimmed != errMsg {
+			errMsg = trimmed
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": errMsg})
 		return
 	}
 

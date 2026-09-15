@@ -1,4 +1,4 @@
-package apikey
+package user
 
 import (
 	"github.com/google/wire"
@@ -7,7 +7,7 @@ import (
 	"study-gin-clerk/internal/infra/crypto"
 )
 
-// ProvideService creates an apikey.Service by adapting concrete dependencies.
+// ProvideService creates a user.Service by adapting concrete dependencies.
 func ProvideService(
 	repo *Repository,
 	registry *ai.ModelRegistry,
@@ -22,3 +22,4 @@ var Set = wire.NewSet(
 	ProvideService,
 	NewHandler,
 )
+

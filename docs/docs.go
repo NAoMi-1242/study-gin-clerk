@@ -471,7 +471,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/profile.Profile"
+                            "$ref": "#/definitions/user.Profile"
                         }
                     },
                     "401": {
@@ -527,7 +527,7 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/apikey.Key"
+                                    "$ref": "#/definitions/user.Key"
                                 }
                             }
                         }
@@ -576,7 +576,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/apikey.RegisterAPIKeyRequest"
+                            "$ref": "#/definitions/user.RegisterAPIKeyRequest"
                         }
                     }
                 ],
@@ -718,7 +718,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/profile.UpdateSystemPromptRequest"
+                            "$ref": "#/definitions/user.UpdateSystemPromptRequest"
                         }
                     }
                 ],
@@ -726,7 +726,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/profile.Profile"
+                            "$ref": "#/definitions/user.Profile"
                         }
                     },
                     "400": {
@@ -793,56 +793,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "apikey.Key": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "key_hint": {
-                    "description": "Masked representation for display (e.g. \"sk-or-v1-...1234\")",
-                    "type": "string"
-                },
-                "provider": {
-                    "description": "ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.Provider"
-                        }
-                    ]
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "apikey.RegisterAPIKeyRequest": {
-            "type": "object",
-            "required": [
-                "api_key",
-                "provider"
-            ],
-            "properties": {
-                "api_key": {
-                    "type": "string",
-                    "maxLength": 500
-                },
-                "provider": {
-                    "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.Provider"
-                        }
-                    ]
-                }
-            }
-        },
         "chat.Chat": {
             "type": "object",
             "properties": {
@@ -937,7 +887,51 @@ const docTemplate = `{
                 }
             }
         },
-        "profile.Profile": {
+        "types.Provider": {
+            "type": "string",
+            "enum": [
+                "openrouter",
+                "openai",
+                "anthropic",
+                "google"
+            ],
+            "x-enum-varnames": [
+                "ProviderOpenRouter",
+                "ProviderOpenAI",
+                "ProviderAnthropic",
+                "ProviderGoogle"
+            ]
+        },
+        "user.Key": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "key_hint": {
+                    "description": "Masked representation for display (e.g. \"sk-or-v1-...1234\")",
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Provider"
+                        }
+                    ]
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.Profile": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -954,7 +948,28 @@ const docTemplate = `{
                 }
             }
         },
-        "profile.UpdateSystemPromptRequest": {
+        "user.RegisterAPIKeyRequest": {
+            "type": "object",
+            "required": [
+                "api_key",
+                "provider"
+            ],
+            "properties": {
+                "api_key": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "provider": {
+                    "description": "\"openrouter\", \"openai\", \"anthropic\", \"google\"",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Provider"
+                        }
+                    ]
+                }
+            }
+        },
+        "user.UpdateSystemPromptRequest": {
             "type": "object",
             "properties": {
                 "system_prompt": {
@@ -962,21 +977,6 @@ const docTemplate = `{
                     "maxLength": 10000
                 }
             }
-        },
-        "types.Provider": {
-            "type": "string",
-            "enum": [
-                "openrouter",
-                "openai",
-                "anthropic",
-                "google"
-            ],
-            "x-enum-varnames": [
-                "ProviderOpenRouter",
-                "ProviderOpenAI",
-                "ProviderAnthropic",
-                "ProviderGoogle"
-            ]
         }
     },
     "securityDefinitions": {

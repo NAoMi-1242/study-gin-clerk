@@ -1,36 +1,5 @@
 basePath: /
 definitions:
-  apikey.Key:
-    properties:
-      created_at:
-        type: string
-      id:
-        type: integer
-      key_hint:
-        description: Masked representation for display (e.g. "sk-or-v1-...1234")
-        type: string
-      provider:
-        allOf:
-        - $ref: '#/definitions/types.Provider'
-        description: ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle
-      updated_at:
-        type: string
-      user_id:
-        type: string
-    type: object
-  apikey.RegisterAPIKeyRequest:
-    properties:
-      api_key:
-        maxLength: 500
-        type: string
-      provider:
-        allOf:
-        - $ref: '#/definitions/types.Provider'
-        description: '"openrouter", "openai", "anthropic", "google"'
-    required:
-    - api_key
-    - provider
-    type: object
   chat.Chat:
     properties:
       created_at:
@@ -94,23 +63,6 @@ definitions:
     - model
     - provider
     type: object
-  profile.Profile:
-    properties:
-      created_at:
-        type: string
-      system_prompt:
-        type: string
-      updated_at:
-        type: string
-      user_id:
-        type: string
-    type: object
-  profile.UpdateSystemPromptRequest:
-    properties:
-      system_prompt:
-        maxLength: 10000
-        type: string
-    type: object
   types.Provider:
     enum:
     - openrouter
@@ -123,6 +75,54 @@ definitions:
     - ProviderOpenAI
     - ProviderAnthropic
     - ProviderGoogle
+  user.Key:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      key_hint:
+        description: Masked representation for display (e.g. "sk-or-v1-...1234")
+        type: string
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.Provider'
+        description: ProviderOpenRouter, ProviderOpenAI, ProviderAnthropic, ProviderGoogle
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  user.Profile:
+    properties:
+      created_at:
+        type: string
+      system_prompt:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  user.RegisterAPIKeyRequest:
+    properties:
+      api_key:
+        maxLength: 500
+        type: string
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.Provider'
+        description: '"openrouter", "openai", "anthropic", "google"'
+    required:
+    - api_key
+    - provider
+    type: object
+  user.UpdateSystemPromptRequest:
+    properties:
+      system_prompt:
+        maxLength: 10000
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -420,7 +420,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/profile.Profile'
+            $ref: '#/definitions/user.Profile'
         "401":
           description: 未認証
           schema:
@@ -455,7 +455,7 @@ paths:
           schema:
             additionalProperties:
               items:
-                $ref: '#/definitions/apikey.Key'
+                $ref: '#/definitions/user.Key'
               type: array
             type: object
         "401":
@@ -485,7 +485,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/apikey.RegisterAPIKeyRequest'
+          $ref: '#/definitions/user.RegisterAPIKeyRequest'
       produces:
       - application/json
       responses:
@@ -576,14 +576,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/profile.UpdateSystemPromptRequest'
+          $ref: '#/definitions/user.UpdateSystemPromptRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/profile.Profile'
+            $ref: '#/definitions/user.Profile'
         "400":
           description: 不正なリクエスト
           schema:

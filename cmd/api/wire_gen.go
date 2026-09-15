@@ -8,16 +8,14 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"study-gin-clerk/internal/aimodel"
-	"study-gin-clerk/internal/apikey"
 	"study-gin-clerk/internal/chat"
 	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/health"
 	"study-gin-clerk/internal/infra/ai"
 	"study-gin-clerk/internal/infra/crypto"
 	"study-gin-clerk/internal/infra/db"
-	"study-gin-clerk/internal/profile"
 	"study-gin-clerk/internal/router"
+	"study-gin-clerk/internal/user"
 )
 
 // Injectors from wire.go:
@@ -28,10 +26,7 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 		return nil, nil, err
 	}
 	handler := health.NewHandler(gormDB)
-	repository := profile.NewRepository(gormDB)
-	service := profile.NewService(repository)
-	profileHandler := profile.NewHandler(service)
-	apikeyRepository := apikey.NewRepository(gormDB)
+	repository := user.NewRepository(gormDB)
 	modelRegistry := ai.NewModelRegistry()
 	memoryCache, cleanup2 := ai.NewMemoryCacheDefault()
 	aesCipher, err := crypto.ProvideCipher(cfg)
@@ -40,21 +35,17 @@ func InitializeApp(cfg config.Config) (*gin.Engine, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	apikeyService := apikey.ProvideService(apikeyRepository, modelRegistry, memoryCache, aesCipher)
-	apikeyHandler := apikey.NewHandler(apikeyService)
-	aimodelService := aimodel.ProvideService(apikeyService, modelRegistry, memoryCache)
-	aimodelHandler := aimodel.NewHandler(aimodelService)
+	service := user.ProvideService(repository, modelRegistry, memoryCache, aesCipher)
+	userHandler := user.NewHandler(service)
 	chatRepository := chat.NewRepository(gormDB)
 	client := ai.NewClient(cfg)
-	chatService := chat.ProvideService(chatRepository, apikeyService, client, service)
-	chatHandler := chat.NewHandler(chatService)
+	chatService := chat.ProvideService(chatRepository, client, modelRegistry, memoryCache)
+	chatHandler := chat.NewHandler(chatService, service)
 	dependencies := router.Dependencies{
-		Config:         cfg,
-		HealthHandler:  handler,
-		ProfileHandler: profileHandler,
-		APIKeyHandler:  apikeyHandler,
-		AIModelHandler: aimodelHandler,
-		ChatHandler:    chatHandler,
+		Config:        cfg,
+		HealthHandler: handler,
+		UserHandler:   userHandler,
+		ChatHandler:   chatHandler,
 	}
 	engine := router.New(dependencies)
 	return engine, func() {

@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -112,17 +113,43 @@ func (c *Client) buildMessages(systemPrompt string, history []ChatMessage, promp
 func formatAIError(providerName types.Provider, modelID string, err error) error {
 	var apiErr *goai.APIError
 	if errors.As(err, &apiErr) {
-		var details []string
+		var msg string
+		if apiErr.ResponseBody != "" {
+			var bodyErr struct {
+				Error struct {
+					Message  string `json:"message"`
+					Metadata struct {
+						Raw        string `json:"raw"`
+						RemedyHint string `json:"remedy_hint"`
+					} `json:"metadata"`
+				} `json:"error"`
+			}
+			if json.Unmarshal([]byte(apiErr.ResponseBody), &bodyErr) == nil {
+				if bodyErr.Error.Metadata.Raw != "" {
+					msg = bodyErr.Error.Metadata.Raw
+				} else if bodyErr.Error.Message != "" {
+					msg = bodyErr.Error.Message
+					if bodyErr.Error.Metadata.RemedyHint != "" {
+						msg += " (" + bodyErr.Error.Metadata.RemedyHint + ")"
+					}
+				}
+			}
+		}
+
+		if msg == "" {
+			if apiErr.Message != "" {
+				msg = apiErr.Message
+			} else if apiErr.ResponseBody != "" {
+				msg = apiErr.ResponseBody
+			}
+		}
+
+		statusStr := ""
 		if apiErr.StatusCode > 0 {
-			details = append(details, fmt.Sprintf("HTTP %d", apiErr.StatusCode))
+			statusStr = fmt.Sprintf("HTTP %d - ", apiErr.StatusCode)
 		}
-		if apiErr.Message != "" {
-			details = append(details, apiErr.Message)
-		}
-		if apiErr.ResponseBody != "" && apiErr.ResponseBody != apiErr.Message {
-			details = append(details, fmt.Sprintf("body: %s", apiErr.ResponseBody))
-		}
-		return fmt.Errorf("AI generation failed (%s/%s): %s", providerName, modelID, strings.Join(details, " - "))
+
+		return fmt.Errorf("AI generation failed (%s/%s): %s%s", providerName, modelID, statusStr, msg)
 	}
 	return fmt.Errorf("AI generation failed (%s/%s): %w", providerName, modelID, err)
 }
@@ -141,7 +168,12 @@ func (c *Client) GenerateReply(
 	}
 
 	msgs := c.buildMessages(systemPrompt, history, prompt)
-	res, err := goai.GenerateText(ctx, langModel, goai.WithMessages(msgs...))
+	res, err := goai.GenerateText(
+		ctx,
+		langModel,
+		goai.WithMessages(msgs...),
+		goai.WithMaxOutputTokens(4096),
+	)
 	if err != nil {
 		return "", formatAIError(providerName, modelID, err)
 	}
@@ -163,7 +195,12 @@ func (c *Client) StreamReply(
 	}
 
 	msgs := c.buildMessages(systemPrompt, history, prompt)
-	stream, err := goai.StreamText(ctx, langModel, goai.WithMessages(msgs...))
+	stream, err := goai.StreamText(
+		ctx,
+		langModel,
+		goai.WithMessages(msgs...),
+		goai.WithMaxOutputTokens(4096),
+	)
 	if err != nil {
 		return nil, formatAIError(providerName, modelID, err)
 	}

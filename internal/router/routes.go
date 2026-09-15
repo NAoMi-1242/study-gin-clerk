@@ -9,22 +9,18 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	_ "study-gin-clerk/docs"
-	"study-gin-clerk/internal/aimodel"
-	"study-gin-clerk/internal/apikey"
+	"study-gin-clerk/internal/auth"
 	"study-gin-clerk/internal/chat"
 	"study-gin-clerk/internal/config"
 	"study-gin-clerk/internal/health"
-	"study-gin-clerk/internal/middleware"
-	"study-gin-clerk/internal/profile"
+	"study-gin-clerk/internal/user"
 )
 
 type Dependencies struct {
-	Config         config.Config
-	HealthHandler  *health.Handler
-	ProfileHandler *profile.Handler
-	APIKeyHandler  *apikey.Handler
-	AIModelHandler *aimodel.Handler
-	ChatHandler    *chat.Handler
+	Config        config.Config
+	HealthHandler *health.Handler
+	UserHandler   *user.Handler
+	ChatHandler   *chat.Handler
 }
 
 func New(deps Dependencies) *gin.Engine {
@@ -51,25 +47,26 @@ func New(deps Dependencies) *gin.Engine {
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	api := engine.Group("/api/v1")
-	api.Use(middleware.ClerkAuthMiddleware())
+	api.Use(auth.RequireAuth())
 
-	// 自身のアカウント・設定関連エンドポイント
+	// ユーザープロファイル・設定関連エンドポイント
 	me := api.Group("/me")
 	{
-		me.GET("", deps.ProfileHandler.GetMe)
-		me.PUT("/system-prompt", deps.ProfileHandler.UpdateSystemPrompt)
+		me.GET("", deps.UserHandler.GetMe)
+		me.PUT("/system-prompt", deps.UserHandler.UpdateSystemPrompt)
 
 		apiKeys := me.Group("/api-keys")
 		{
-			apiKeys.POST("", deps.APIKeyHandler.RegisterKey)
-			apiKeys.GET("", deps.APIKeyHandler.ListKeys)
-			apiKeys.DELETE("/:provider", deps.APIKeyHandler.DeleteKey)
+			apiKeys.POST("", deps.UserHandler.RegisterKey)
+			apiKeys.GET("", deps.UserHandler.ListKeys)
+			apiKeys.DELETE("/:provider", deps.UserHandler.DeleteKey)
 		}
 	}
 
-	// AI モデル関連エンドポイント
-	api.GET("/ai/models", deps.AIModelHandler.ListModels)
+	// AI モデル一覧
+	api.GET("/ai/models", deps.ChatHandler.ListModels)
 
+	// チャット・メッセージ
 	chats := api.Group("/chats")
 	{
 		chats.POST("", deps.ChatHandler.CreateChat)

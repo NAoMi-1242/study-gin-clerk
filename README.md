@@ -2,7 +2,7 @@
 
 本プロジェクトは、**Go (Gin)** と **Clerk** による認証基盤の上に、**GORM (PostgreSQL)** および **GoAI (マルチプロバイダ LLM: OpenRouter, OpenAI, Claude, Gemini)** を統合した「AI チャットアプリケーション」のバックエンド API サーバーです。
 
-実務で耐えうる **「ドメイン凝集」「疎結合（DIP）」「高テスタビリティ」「コンパイル時 DI（Google Wire）」** を備えたアーキテクチャを採用しています。
+実務で耐えうる **「ドメイン凝集」「サービス間疎結合（DIP）」「高テスタビリティ」「コンパイル時 DI（Google Wire）」** を備えたアーキテクチャを採用しています。
 
 ---
 
@@ -37,34 +37,39 @@
 
 ## 2. システムアーキテクチャ & データフロー
 
-システムはドメイン駆動・機能別（Package by Feature）に基づき、以下の階層構造で構成されています。
+システムは自然な境界に基づく機能別（Package-by-feature）で設計されており、**「サービス間依存ゼロ（ハンドラー調停・直接引数渡し）」** を徹底しています。
 
 ```mermaid
 graph TD
     Client["クライアント (Web / Swagger UI)"] -->|HTTP / SSE| Router["Router (routes.go)"]
-    Router -->|Authorization Header| Middleware["Middleware (clerk.go)"]
+    Router -->|Authorization Header| AuthMW["auth.RequireAuth() (middleware.go)"]
 
     subgraph "防腐層 (ACL) & 認証"
-        Middleware -->|JWT検証| ClerkSDK["Clerk Go SDK"]
-        Middleware -->|User ID抽出| AuthCtx["internal/auth (Context操作)"]
+        AuthMW -->|JWT検証| ClerkSDK["Clerk Go SDK"]
+        AuthMW -->|User ID抽出| AuthCtx["internal/auth (Context操作)"]
     end
 
-    Middleware -->|c.Next| Handlers["Domain Handlers (chat / apikey / profile / aimodel / health)"]
+    AuthMW -->|c.Next| Handlers["Domain Handlers (chat / user / health)"]
     Handlers -->|MustGetUserID| AuthCtx
-    Handlers -->|業務処理要求| Services["Domain Services"]
 
-    subgraph "ドメイン層 (インターフェース駆動)"
-        Services -->|抽象インターフェース経由| Repositories["Domain Repositories"]
-        Services -->|抽象インターフェース経由| Infra["Infra Clients (GoAI / Crypto / DB)"]
+    subgraph "ハンドラー調停 & ドメイン層"
+        ChatH["chat.Handler"] -->|1. Key/Prompt取得| UserSvc["user.Service"]
+        ChatH -->|2. 引数で直接渡す| ChatSvc["chat.Service"]
+        UserH["user.Handler"] --> UserSvc
     end
 
-    Repositories -->|SQL実行| DBClient["*gorm.DB (コネクションプール)"]
-    DBClient -->|TCP接続| Database[("PostgreSQL 16")]
-    Infra -->|HTTPS| AIProviders["AI 各社 API (OpenRouter / OpenAI / Anthropic / Google)"]
+    subgraph "データ永続化 & インフラ"
+        ChatSvc --> ChatRepo["chat.Repository"]
+        UserSvc --> UserRepo["user.Repository"]
+        ChatSvc --> AIClient["infra/ai.Client (GoAI)"]
+        UserSvc --> AESCipher["infra/crypto.AESCipher"]
+        UserSvc --> AIRegistry["infra/ai.ModelRegistry"]
+    end
 
-    Wire["Google Wire"] -.->|依存性を自動注入| Handlers
-    Wire -.->|依存性を自動注入| Services
-    Wire -.->|依存性を自動注入| Repositories
+    ChatRepo -->|SQL実行| DBClient["*gorm.DB (コネクションプール)"]
+    UserRepo -->|SQL実行| DBClient
+    DBClient -->|TCP接続| Database[("PostgreSQL 16")]
+    AIClient -->|HTTPS| AIProviders["AI 各社 API (OpenRouter / OpenAI / Anthropic / Google)"]
 ```
 
 ---
@@ -76,6 +81,7 @@ study-gin-clerk/
   ├── Dockerfile                    # Go 1.26 + Air + Wire + Swag + golang-migrate
   ├── compose.yaml                  # Docker Compose 定義 (Go API + PostgreSQL 16 + Web Nginx)
   ├── .air.toml                     # ホットリロード設定
+  ├── ARCHITECTURE.md               # アーキテクチャ完全解説ガイド
   ├── wire-manual.md                # Google Wire 運用マニュアル
   ├── migrations/                   # golang-migrate SQL マイグレーション
   │    ├── 000001_create_initial_tables.up.sql / down.sql
@@ -87,18 +93,15 @@ study-gin-clerk/
   │         └── wire_gen.go         # Wire 自動生成コード
   ├── docs/                         # Swagger 自動生成ドキュメント (docs.go, swagger.json, swagger.yaml)
   ├── internal/
-  │    ├── auth/                    # 認証コンテキスト操作 (SetUserID, GetUserID, MustGetUserID)
+  │    ├── auth/                    # 認証コンテキスト & Clerk 認証ミドルウェア (RequireAuth)
   │    ├── config/                  # 環境変数読み込み・バリデーション (CORS, AES鍵, DSN)
-  │    ├── middleware/              # Clerk 認証ミドルウェア (防腐層)
   │    ├── router/                  # ルーティング設定・CORS・Swagger エンドポイント
   │    ├── types/                   # 共通ドメイン値オブジェクト (Provider, AIModel)
-  │    ├── apikey/                  # 【APIキー管理ドメイン】(AES暗号化, バリデーション, 登録)
-  │    ├── chat/                    # 【チャットドメイン】(会話履歴, SSEストリーミング, AI返答)
-  │    ├── profile/                 # 【プロファイルドメイン】(システムプロンプト設定)
-  │    ├── aimodel/                 # 【AIモデルドメイン】(利用可能モデル動的取得・一覧)
   │    ├── health/                  # 【ヘルスチェック】(DB Ping 疎通確認)
+  │    ├── user/                    # 【ユーザー領域】(プロファイル, システムプロンプト, 暗号化APIキー管理)
+  │    ├── chat/                    # 【チャット領域】(会話・メッセージ, SSEストリーミング, モデル一覧)
   │    └── infra/                   # 【インフラ層】
-  │         ├── ai/                 # GoAI クライアント, プロバイダ別 Fetcher (Strategy), MemoryCache
+  │         ├── ai/                 # GoAI クライアント, 各社モデルフェッチャー (Strategy), MemoryCache
   │         ├── crypto/             # AES-256-GCM 暗号化 / 復号化
   │         └── db/                 # GORM 接続・コネクションプール管理
   └── web/
@@ -110,23 +113,23 @@ study-gin-clerk/
 
 ## 4. これまでの設計判断と進化のプロセス（ADR）
 
-### 4.1. レイヤード構成からドメイン別（Package by Feature）への移行
+### 4.1. ドメインの再集約（5ドメイン構成への最適化）
 
-- **背景**: 初期の「handler/」「service/」「model/」による水平分割は、機能追加時に複数のフォルダを行き来する必要があり、依存関係が乱雑になりやすかった。
-- **解決策**: 機能単位（`chat`, `apikey`, `profile`, `aimodel`）でパッケージを独立化。各パッケージ内で Model, Repository, Service, Handler, Wire を完結させた。
+- **背景**: 過剰な細分化（`profile`, `apikey`, `aimodel`, `chat` などへの分断）により、1ファイルしかないパッケージや無駄なプロバイダインターフェースが多発していた。
+- **解決策**: 関連性の高い機能を統合し、ユーザー設定・キー管理を `internal/user`、会話とモデル取得を `internal/chat`、認証を `internal/auth` に集約。
 
-### 4.2. 依存関係逆転の原則（DIP）とインターフェース駆動設計
+### 4.2. サービス間ゼロ結合（アプローチA: 直接引数渡し）
 
-- **背景**: サービス層が暗号化ユーティリティや AI クライアント、外部 API レジストリの具象型に直接依存しており、単体テストが困難だった。
-- **解決策**: 呼び出し側（Consumer-driven）で必要最小限のインターフェース（`KeyValidator`, `CacheInvalidator`, `Encryptor`, `ChatClient`, `ChatRepository` 等）を定義。モックを使用した単体テストを完備した。
+- **背景**: `chat.Service` が `user.Service`（またはそのインターフェース）に依存し、サービス同士が密結合していた。
+- **解決策**: `chat.Handler` が `user.Service` から API キーとシステムプロンプトを取得し、`chat.Service` の引数として直接渡す設計に変更。`chat.Service` の純粋化とテスト容易性を最大化。
 
-### 4.3. Clerk SDK の依存をミドルウェアに隔離（防腐層の導入）
+### 4.3. Clerk SDK の防腐層（ACL）カプセル化
 
-- Clerk SDK の呼び出しを [`internal/middleware/clerk.go`](file:///home/naomi/prog/test/study-gin-clerk/internal/middleware/clerk.go) にカプセル化。後続のハンドラーやドメイン層は純粋な `user_id`（string）のみを扱う。
+- Clerk SDK の呼び出しを `internal/auth/middleware.go` の `RequireAuth()` に完全隔離。後続のハンドラーやドメイン層は純粋な `user_id`（string）のみを扱う。
 
-### 4.4. `APP_URL` と `CORS_ALLOWED_ORIGINS` の責務分離
+### 4.4. 依存関係逆転の原則（DIP）とコンパイル時 DI（Google Wire）
 
-- 自アプリの代表 URL（OpenRouter の `HTTP-Referer` ヘッダー等）と、CORS 許可オリジン一覧（カンマ区切り）を明確に分離。誤設定による不正な HTTP ヘッダー送信バグを防止。
+- 外部技術（DB, 暗号化, AI SDK）は各ドメインが必要とするインターフェースを満たす形で注入。コンパイル時に依存関係を安全に解決。
 
 ---
 
@@ -161,13 +164,7 @@ ENCRYPTION_KEY=03eb48bf7ba4f88a8bc7f269a114cd5b71c89aeb086dec25f6f58e5c09e3303f
 docker compose up -d --build
 ```
 
-### 3. DB マイグレーションの実行
-
-```bash
-docker compose exec api migrate -path migrations -database "postgres://postgres:password@db:5432/study_app?sslmode=disable" up
-```
-
-### 4. 動作確認
+### 3. 動作確認
 
 - **動作検証用 Web UI**: `http://localhost:3000/` (Clerk ログイン・APIキー登録・SSE チャット送受信)
 - **Swagger UI**: `http://localhost:8080/swagger/index.html`
@@ -188,7 +185,7 @@ docker compose exec api migrate -path migrations -database "postgres://postgres:
 ### 単体テストの実行
 
 ```bash
-docker compose exec api go test -v ./...
+docker compose exec api go test -v -count=1 ./...
 ```
 
 ### Wire コードの再生成

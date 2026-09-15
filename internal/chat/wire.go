@@ -3,19 +3,17 @@ package chat
 import (
 	"github.com/google/wire"
 
-	"study-gin-clerk/internal/apikey"
 	"study-gin-clerk/internal/infra/ai"
-	"study-gin-clerk/internal/profile"
 )
 
-// ProvideService adapts concrete apikey.Service and profile.Service to ChatService interfaces for Wire.
+// ProvideService adapts concrete dependencies to chat.Service.
 func ProvideService(
 	repo *Repository,
-	keyService *apikey.Service,
 	aiClient *ai.Client,
-	profileService *profile.Service,
+	registry *ai.ModelRegistry,
+	cache *ai.MemoryCache,
 ) *Service {
-	return NewService(repo, keyService, aiClient, profileService)
+	return NewService(repo, aiClient, registry, cache)
 }
 
 var Set = wire.NewSet(

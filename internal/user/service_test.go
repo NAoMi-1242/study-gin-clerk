@@ -1,4 +1,4 @@
-package apikey
+package user
 
 import (
 	"context"
@@ -8,23 +8,40 @@ import (
 	"study-gin-clerk/internal/types"
 )
 
-// Mock implementations for apikey.Service testing
+// Mock implementations for user.Service testing
 
-type mockKeyRepository struct {
-	keys map[string]*Key // key = userID:provider
+type mockUserRepository struct {
+	profiles map[string]*Profile
+	keys     map[string]*Key // key = userID:provider
 }
 
-func newMockKeyRepository() *mockKeyRepository {
-	return &mockKeyRepository{keys: make(map[string]*Key)}
+func newMockUserRepository() *mockUserRepository {
+	return &mockUserRepository{
+		profiles: make(map[string]*Profile),
+		keys:     make(map[string]*Key),
+	}
 }
 
-func (m *mockKeyRepository) Upsert(ctx context.Context, key *Key) error {
+func (m *mockUserRepository) GetProfile(ctx context.Context, userID string) (*Profile, error) {
+	p, ok := m.profiles[userID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return p, nil
+}
+
+func (m *mockUserRepository) UpsertProfile(ctx context.Context, p *Profile) error {
+	m.profiles[p.UserID] = p
+	return nil
+}
+
+func (m *mockUserRepository) UpsertKey(ctx context.Context, key *Key) error {
 	id := key.UserID + ":" + string(key.Provider)
 	m.keys[id] = key
 	return nil
 }
 
-func (m *mockKeyRepository) GetByProvider(ctx context.Context, userID string, provider types.Provider) (*Key, error) {
+func (m *mockUserRepository) GetKeyByProvider(ctx context.Context, userID string, provider types.Provider) (*Key, error) {
 	id := userID + ":" + string(provider)
 	k, ok := m.keys[id]
 	if !ok {
@@ -33,7 +50,7 @@ func (m *mockKeyRepository) GetByProvider(ctx context.Context, userID string, pr
 	return k, nil
 }
 
-func (m *mockKeyRepository) ListByUserID(ctx context.Context, userID string) ([]Key, error) {
+func (m *mockUserRepository) ListKeysByUserID(ctx context.Context, userID string) ([]Key, error) {
 	var result []Key
 	for _, k := range m.keys {
 		if k.UserID == userID {
@@ -43,7 +60,7 @@ func (m *mockKeyRepository) ListByUserID(ctx context.Context, userID string) ([]
 	return result, nil
 }
 
-func (m *mockKeyRepository) DeleteByProvider(ctx context.Context, userID string, provider types.Provider) error {
+func (m *mockUserRepository) DeleteKeyByProvider(ctx context.Context, userID string, provider types.Provider) error {
 	id := userID + ":" + string(provider)
 	if _, ok := m.keys[id]; !ok {
 		return ErrNotFound
@@ -90,8 +107,43 @@ func (m *mockCipher) Decrypt(cipherTextBase64 string) (string, error) {
 	return cipherTextBase64[len(m.prefix):], nil
 }
 
+func TestService_GetProfile_Default(t *testing.T) {
+	repo := newMockUserRepository()
+	svc := NewService(repo, nil, nil, nil)
+
+	p, err := svc.GetProfile(context.Background(), "user_new")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.UserID != "user_new" || p.SystemPrompt != "" {
+		t.Errorf("unexpected profile: %+v", p)
+	}
+}
+
+func TestService_UpdateSystemPrompt(t *testing.T) {
+	repo := newMockUserRepository()
+	svc := NewService(repo, nil, nil, nil)
+
+	ctx := context.Background()
+	p, err := svc.UpdateSystemPrompt(ctx, "user_1", "You are a helpful assistant.")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.SystemPrompt != "You are a helpful assistant." {
+		t.Errorf("got %q, want 'You are a helpful assistant.'", p.SystemPrompt)
+	}
+
+	retrieved, err := svc.GetProfile(ctx, "user_1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if retrieved.SystemPrompt != "You are a helpful assistant." {
+		t.Errorf("got %q, want 'You are a helpful assistant.'", retrieved.SystemPrompt)
+	}
+}
+
 func TestService_RegisterKey_Success(t *testing.T) {
-	repo := newMockKeyRepository()
+	repo := newMockUserRepository()
 	validator := &mockValidator{valid: true}
 	cache := &mockCacheInvalidator{}
 	cipher := &mockCipher{prefix: "enc:"}
@@ -116,7 +168,7 @@ func TestService_RegisterKey_Success(t *testing.T) {
 }
 
 func TestService_RegisterKey_ValidationFailed(t *testing.T) {
-	repo := newMockKeyRepository()
+	repo := newMockUserRepository()
 	validator := &mockValidator{valid: false}
 	cache := &mockCacheInvalidator{}
 	cipher := &mockCipher{prefix: "enc:"}
@@ -134,7 +186,7 @@ func TestService_RegisterKey_ValidationFailed(t *testing.T) {
 }
 
 func TestService_GetDecryptedKey(t *testing.T) {
-	repo := newMockKeyRepository()
+	repo := newMockUserRepository()
 	validator := &mockValidator{valid: true}
 	cache := &mockCacheInvalidator{}
 	cipher := &mockCipher{prefix: "enc:"}
@@ -164,7 +216,7 @@ func TestService_GetDecryptedKey(t *testing.T) {
 }
 
 func TestService_DeleteKey(t *testing.T) {
-	repo := newMockKeyRepository()
+	repo := newMockUserRepository()
 	validator := &mockValidator{valid: true}
 	cache := &mockCacheInvalidator{}
 	cipher := &mockCipher{prefix: "enc:"}

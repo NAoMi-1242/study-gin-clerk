@@ -9,8 +9,8 @@ import (
 	"github.com/zendev-sh/goai"
 
 	"study-gin-clerk/internal/infra/ai"
-	"study-gin-clerk/internal/profile"
 	"study-gin-clerk/internal/types"
+	"study-gin-clerk/internal/user"
 )
 
 // Mock implementations for chat.Service testing
@@ -80,29 +80,6 @@ func (m *mockChatRepository) CreateMessagePair(ctx context.Context, chatID uint,
 	return uMsg, aMsg, nil
 }
 
-type mockKeyProvider struct {
-	keys map[string]string // key = userID:provider
-}
-
-func (m *mockKeyProvider) GetDecryptedKey(ctx context.Context, userID string, provider types.Provider) (string, error) {
-	k, ok := m.keys[userID+":"+string(provider)]
-	if !ok {
-		return "", errors.New("key not found")
-	}
-	return k, nil
-}
-
-type mockProfileProvider struct {
-	systemPrompt string
-}
-
-func (m *mockProfileProvider) GetProfile(ctx context.Context, userID string) (*profile.Profile, error) {
-	return &profile.Profile{
-		UserID:       userID,
-		SystemPrompt: m.systemPrompt,
-	}, nil
-}
-
 type mockChatClient struct {
 	replyText string
 	err       error
@@ -131,13 +108,41 @@ func (m *mockChatClient) StreamReply(
 	if m.err != nil {
 		return nil, m.err
 	}
-	// For testing StreamReply setup without real GoAI stream
 	return nil, nil
+}
+
+type mockModelFetcher struct {
+	models map[types.Provider][]types.AIModel
+	err    error
+}
+
+func (m *mockModelFetcher) FetchModels(ctx context.Context, providerName types.Provider, apiKey string) ([]types.AIModel, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.models[providerName], nil
+}
+
+type mockModelCache struct {
+	store map[string][]types.AIModel
+}
+
+func newMockModelCache() *mockModelCache {
+	return &mockModelCache{store: make(map[string][]types.AIModel)}
+}
+
+func (m *mockModelCache) Get(userID string, provider types.Provider) ([]types.AIModel, bool) {
+	models, ok := m.store[userID+":"+string(provider)]
+	return models, ok
+}
+
+func (m *mockModelCache) Set(userID string, provider types.Provider, models []types.AIModel) {
+	m.store[userID+":"+string(provider)] = models
 }
 
 func TestChatService_CreateChat(t *testing.T) {
 	repo := newMockChatRepository()
-	svc := NewService(repo, &mockKeyProvider{}, &mockChatClient{}, &mockProfileProvider{})
+	svc := NewService(repo, &mockChatClient{}, nil, nil)
 
 	ctx := context.Background()
 
@@ -162,21 +167,24 @@ func TestChatService_CreateChat(t *testing.T) {
 
 func TestChatService_SendMessage_Success(t *testing.T) {
 	repo := newMockChatRepository()
-	keyProvider := &mockKeyProvider{
-		keys: map[string]string{
-			"user_1:openrouter": "test-key-123",
-		},
-	}
 	client := &mockChatClient{replyText: "AIからの回答です"}
-	profileProvider := &mockProfileProvider{systemPrompt: "あなたは丁寧なAIです"}
 
-	svc := NewService(repo, keyProvider, client, profileProvider)
+	svc := NewService(repo, client, nil, nil)
 	ctx := context.Background()
 
 	// Create chat first
 	c, _ := svc.CreateChat(ctx, "user_1", "新規会話")
 
-	userMsg, aiMsg, err := svc.SendMessage(ctx, c.ID, "user_1", "こんにちは", types.ProviderOpenRouter, "anthropic/claude-3.5-sonnet")
+	userMsg, aiMsg, err := svc.SendMessage(
+		ctx,
+		c.ID,
+		"user_1",
+		"こんにちは",
+		types.ProviderOpenRouter,
+		"anthropic/claude-3.5-sonnet",
+		"test-api-key",
+		"あなたは親切なAIです",
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -198,23 +206,59 @@ func TestChatService_SendMessage_Success(t *testing.T) {
 	}
 }
 
-func TestChatService_SendMessage_APIKeyNotConfigured(t *testing.T) {
+func TestChatService_SendMessage_ValidationFailed(t *testing.T) {
 	repo := newMockChatRepository()
-	keyProvider := &mockKeyProvider{keys: map[string]string{}} // No keys registered
 	client := &mockChatClient{replyText: "AI"}
-	profileProvider := &mockProfileProvider{}
 
-	svc := NewService(repo, keyProvider, client, profileProvider)
+	svc := NewService(repo, client, nil, nil)
 	ctx := context.Background()
 
 	c, _ := svc.CreateChat(ctx, "user_1", "新規会話")
 
-	_, _, err := svc.SendMessage(ctx, c.ID, "user_1", "こんにちは", types.ProviderOpenRouter, "some-model")
-	if err == nil {
-		t.Fatalf("expected error, got nil")
+	// Missing content
+	_, _, err := svc.SendMessage(ctx, c.ID, "user_1", "", types.ProviderOpenRouter, "model", "key", "")
+	if !errors.Is(err, ErrValidationFailed) {
+		t.Errorf("expected ErrValidationFailed for empty content, got %v", err)
 	}
-	if !errors.Is(err, ErrAPIKeyNotConfigured) {
-		t.Errorf("expected ErrAPIKeyNotConfigured, got %v", err)
+
+	// Missing apiKey
+	_, _, err = svc.SendMessage(ctx, c.ID, "user_1", "hello", types.ProviderOpenRouter, "model", "", "")
+	if !errors.Is(err, ErrValidationFailed) {
+		t.Errorf("expected ErrValidationFailed for empty apiKey, got %v", err)
 	}
 }
 
+func TestChatService_GetAvailableModels(t *testing.T) {
+	fetcher := &mockModelFetcher{
+		models: map[types.Provider][]types.AIModel{
+			types.ProviderOpenRouter: {
+				{ID: "openrouter/auto", Name: "Auto", Provider: types.ProviderOpenRouter},
+			},
+		},
+	}
+	cache := newMockModelCache()
+	svc := NewService(nil, nil, fetcher, cache)
+
+	ctx := context.Background()
+	keys := []user.DecryptedKey{
+		{Provider: types.ProviderOpenRouter, RawKey: "test-or-key"},
+	}
+
+	// 1. First call fetches from provider and populates cache
+	models, providers, err := svc.GetAvailableModels(ctx, "user_1", keys, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(models) != 1 || models[0].ID != "openrouter/auto" {
+		t.Errorf("unexpected models: %+v", models)
+	}
+	if len(providers) != 1 || providers[0] != types.ProviderOpenRouter {
+		t.Errorf("unexpected providers: %+v", providers)
+	}
+
+	// 2. Second call should use cache
+	cachedModels, found := cache.Get("user_1", types.ProviderOpenRouter)
+	if !found || len(cachedModels) != 1 {
+		t.Errorf("expected models in cache, got %+v", cachedModels)
+	}
+}

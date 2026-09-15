@@ -3,25 +3,16 @@ package chat
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/zendev-sh/goai"
 
 	"study-gin-clerk/internal/infra/ai"
-	"study-gin-clerk/internal/profile"
 	"study-gin-clerk/internal/types"
+	"study-gin-clerk/internal/user"
 )
-
-// KeyProvider defines the interface required by ChatService to retrieve decrypted API keys.
-type KeyProvider interface {
-	GetDecryptedKey(ctx context.Context, userID string, provider types.Provider) (string, error)
-}
-
-// ProfileProvider defines the interface required by ChatService to retrieve user profile settings.
-type ProfileProvider interface {
-	GetProfile(ctx context.Context, userID string) (*profile.Profile, error)
-}
 
 // ChatRepository defines the storage interface for chats and messages.
 type ChatRepository interface {
@@ -51,6 +42,17 @@ type ChatClient interface {
 	) (*goai.TextStream, error)
 }
 
+// ModelFetcher discovers available models from an AI provider.
+type ModelFetcher interface {
+	FetchModels(ctx context.Context, providerName types.Provider, apiKey string) ([]types.AIModel, error)
+}
+
+// ModelCache caches AI models in memory.
+type ModelCache interface {
+	Get(userID string, provider types.Provider) ([]types.AIModel, bool)
+	Set(userID string, provider types.Provider, models []types.AIModel)
+}
+
 // StreamMessageResult holds the stream instance and message persistence hook.
 type StreamMessageResult struct {
 	UserMessage *Message
@@ -59,23 +61,23 @@ type StreamMessageResult struct {
 }
 
 type Service struct {
-	repo            ChatRepository
-	keyProvider     KeyProvider
-	aiClient        ChatClient
-	profileProvider ProfileProvider
+	repo     ChatRepository
+	aiClient ChatClient
+	fetcher  ModelFetcher
+	cache    ModelCache
 }
 
 func NewService(
 	repo ChatRepository,
-	keyProvider KeyProvider,
 	aiClient ChatClient,
-	profileProvider ProfileProvider,
+	fetcher ModelFetcher,
+	cache ModelCache,
 ) *Service {
 	return &Service{
-		repo:            repo,
-		keyProvider:     keyProvider,
-		aiClient:        aiClient,
-		profileProvider: profileProvider,
+		repo:     repo,
+		aiClient: aiClient,
+		fetcher:  fetcher,
+		cache:    cache,
 	}
 }
 
@@ -98,52 +100,6 @@ func (s *Service) GetChat(ctx context.Context, chatID uint, userID string) (*Cha
 	return s.repo.GetWithMessages(ctx, chatID, userID)
 }
 
-type sessionContext struct {
-	chat         *Chat
-	apiKey       string
-	systemPrompt string
-}
-
-func (s *Service) prepareSession(
-	ctx context.Context,
-	chatID uint,
-	userID string,
-	providerName types.Provider,
-	modelID string,
-) (*sessionContext, error) {
-	if !providerName.IsValid() {
-		return nil, fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, providerName)
-	}
-	if modelID == "" {
-		return nil, fmt.Errorf("%w: model is required", ErrValidationFailed)
-	}
-
-	// 1. チャットの所有権と過去メッセージ履歴を取得
-	c, err := s.repo.GetWithMessages(ctx, chatID, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. ユーザーの API キーを復号して取得
-	apiKey, err := s.keyProvider.GetDecryptedKey(ctx, userID, providerName)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrAPIKeyNotConfigured, err)
-	}
-
-	// 3. ユーザーの最新システムプロンプトを取得 (動的適用)
-	userProfile, _ := s.profileProvider.GetProfile(ctx, userID)
-	systemPrompt := ""
-	if userProfile != nil {
-		systemPrompt = userProfile.SystemPrompt
-	}
-
-	return &sessionContext{
-		chat:         c,
-		apiKey:       apiKey,
-		systemPrompt: systemPrompt,
-	}, nil
-}
-
 func toAIChatMessages(messages []Message) []ai.ChatMessage {
 	aiMsgs := make([]ai.ChatMessage, 0, len(messages))
 	for _, m := range messages {
@@ -162,27 +118,39 @@ func (s *Service) SendMessage(
 	userID, content string,
 	providerName types.Provider,
 	modelID string,
+	apiKey string,
+	systemPrompt string,
 ) (*Message, *Message, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, nil, fmt.Errorf("%w: content cannot be empty", ErrValidationFailed)
 	}
 	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return nil, nil, fmt.Errorf("%w: model is required", ErrValidationFailed)
+	}
+	if !providerName.IsValid() {
+		return nil, nil, fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, providerName)
+	}
+	if apiKey == "" {
+		return nil, nil, fmt.Errorf("%w: api key is required", ErrValidationFailed)
+	}
 
-	session, err := s.prepareSession(ctx, chatID, userID, providerName, modelID)
+	// 1. チャットの所有権と過去メッセージ履歴を取得
+	chat, err := s.repo.GetWithMessages(ctx, chatID, userID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	history := toAIChatMessages(session.chat.Messages)
+	history := toAIChatMessages(chat.Messages)
 
-	// GoAI SDK を用いて AI の返答を生成
+	// 2. GoAI SDK を用いて AI の返答を生成
 	aiContent, err := s.aiClient.GenerateReply(
 		ctx,
 		providerName,
 		modelID,
-		session.apiKey,
-		session.systemPrompt,
+		apiKey,
+		systemPrompt,
 		history,
 		content,
 	)
@@ -190,7 +158,7 @@ func (s *Service) SendMessage(
 		return nil, nil, fmt.Errorf("%w: %s", ErrAIProvider, err.Error())
 	}
 
-	// AI 生成成功後にユーザー発言と AI 返答を単一トランザクションでアトミックに DB 保存
+	// 3. AI 生成成功後にユーザー発言と AI 返答を単一トランザクションでアトミックに DB 保存
 	userMsg, aiMsg, err := s.repo.CreateMessagePair(ctx, chatID, content, aiContent)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to save messages: %w", err)
@@ -206,27 +174,39 @@ func (s *Service) StreamMessage(
 	userID, content string,
 	providerName types.Provider,
 	modelID string,
+	apiKey string,
+	systemPrompt string,
 ) (*StreamMessageResult, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, fmt.Errorf("%w: content cannot be empty", ErrValidationFailed)
 	}
 	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return nil, fmt.Errorf("%w: model is required", ErrValidationFailed)
+	}
+	if !providerName.IsValid() {
+		return nil, fmt.Errorf("%w: unsupported provider '%s'", ErrValidationFailed, providerName)
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("%w: api key is required", ErrValidationFailed)
+	}
 
-	session, err := s.prepareSession(ctx, chatID, userID, providerName, modelID)
+	// 1. チャットの所有権と過去メッセージ履歴を取得
+	chat, err := s.repo.GetWithMessages(ctx, chatID, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	history := toAIChatMessages(session.chat.Messages)
+	history := toAIChatMessages(chat.Messages)
 
-	// GoAI StreamText を呼び出し
+	// 2. GoAI StreamText を呼び出し
 	stream, err := s.aiClient.StreamReply(
 		ctx,
 		providerName,
 		modelID,
-		session.apiKey,
-		session.systemPrompt,
+		apiKey,
+		systemPrompt,
 		history,
 		content,
 	)
@@ -234,13 +214,13 @@ func (s *Service) StreamMessage(
 		return nil, fmt.Errorf("%w: %s", ErrAIProvider, err.Error())
 	}
 
-	// ストリーム接続確立後にユーザーメッセージを保存
+	// 3. ストリーム接続確立後にユーザーメッセージを保存
 	userMsg, err := s.repo.CreateMessage(ctx, chatID, RoleUser, content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
-	// ストリーム完了時に呼び出す DB 保存コールバック (10秒の安全なタイムアウト付き)
+	// 4. ストリーム完了時に呼び出す DB 保存コールバック (10秒の安全なタイムアウト付き)
 	onComplete := func(fullText string) (*Message, error) {
 		saveCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -252,4 +232,43 @@ func (s *Service) StreamMessage(
 		TextStream:  stream,
 		OnComplete:  onComplete,
 	}, nil
+}
+
+// GetAvailableModels retrieves dynamically discovered models for all active providers of the user, using cache.
+func (s *Service) GetAvailableModels(
+	ctx context.Context,
+	userID string,
+	keys []user.DecryptedKey,
+	refresh bool,
+) ([]types.AIModel, []types.Provider, error) {
+	allModels := make([]types.AIModel, 0)
+	activeProviders := make([]types.Provider, 0)
+
+	for _, k := range keys {
+		activeProviders = append(activeProviders, k.Provider)
+
+		if !refresh && s.cache != nil {
+			if cached, found := s.cache.Get(userID, k.Provider); found {
+				allModels = append(allModels, cached...)
+				continue
+			}
+		}
+
+		if s.fetcher == nil {
+			continue
+		}
+
+		models, err := s.fetcher.FetchModels(ctx, k.Provider, k.RawKey)
+		if err != nil {
+			slog.WarnContext(ctx, "failed to fetch models from provider", "provider", k.Provider, "user_id", userID, "error", err)
+			continue
+		}
+
+		if s.cache != nil {
+			s.cache.Set(userID, k.Provider, models)
+		}
+		allModels = append(allModels, models...)
+	}
+
+	return allModels, activeProviders, nil
 }
